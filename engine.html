@@ -38,10 +38,6 @@ from alexandria.data_structs.string import join_set_distance
 
 from huracan.constants import R
 
-&#34;&#34;&#34;
-Huracan engine architecture
-&#34;&#34;&#34;
-
 
 class component:
     &#34;&#34;&#34;
@@ -172,24 +168,41 @@ class stream:
             c(self.gas)
             c.stage = self._stage_name(c)
 
+            if hasattr(c, &#39;choked&#39;) and c.choked:
+                self.choked = c.choked
+
         if log:
             for c in self.components:
                 section_name = join_set_distance(c.stage, c.__class__.__name__.capitalize().replace(&#34;_&#34;, &#34; &#34;), 6)
                 print_color(section_name, &#39;green&#39;)
 
                 if c.__class__.__name__ == &#39;nozzle&#39;:
-                    if c.PI == 1/c.inv_pi_crit(self.gas):
+                    if c.choked:
                         print_color(&#39;      Choked flow&#39;, &#39;red&#39;)
 
                 print_result(&#39;       T0&#39;, c.t0, &#39;[K]&#39;)
                 print_result(&#39;       p0&#39;, c.p0, &#39;[Pa]&#39;)
 
-    def stages(self):
+    def _stage_name(self, c):
         &#34;&#34;&#34;
-        Return a list containing the stage name of each
-        component in the stream.
+        Return the stage name of a component in the stream,
+        composed of the stream identification number, a code
+        representing its parent class, and a numerical index
+        if there are more than 1 components of the same class
+        in the stream.
         &#34;&#34;&#34;
-        return [c.stage for c in self.components]
+        codes = {&#39;intake&#39;:             &#39;it&#39;,
+                 &#39;inlet&#39;:              &#39;il&#39;,
+                 &#39;fan&#39;:                &#39;fn&#39;,
+                 &#39;compressor&#39;:         &#39;c&#39;,
+                 &#39;combustion_chamber&#39;: &#39;cc&#39;,
+                 &#39;turbine&#39;:            &#39;t&#39;,
+                 &#39;afterburner&#39;:        &#39;ab&#39;,
+                 &#39;nozzle&#39;:             &#39;n&#39;
+                 }
+
+        code = codes[c.__class__.__name__] + self._n_instances(c)
+        return f&#39;{self.stream_id}.{code}&#39;
 
     def _n_instances(self, comp):
         &#34;&#34;&#34;
@@ -226,26 +239,12 @@ class stream:
 
         return &#39;&#39; if n == 0 else str(n)
 
-    def _stage_name(self, c):
+    def stages(self):
         &#34;&#34;&#34;
-        Return the stage name of a component in the stream,
-        composed of the stream identification number, a code
-        representing its parent class, and a numerical index
-        if there are more than 1 components of the same class
-        in the stream.
+        Return a list containing the stage name of each
+        component in the stream.
         &#34;&#34;&#34;
-        codes = {&#39;intake&#39;:             &#39;it&#39;,
-                 &#39;inlet&#39;:              &#39;il&#39;,
-                 &#39;fan&#39;:                &#39;fn&#39;,
-                 &#39;compressor&#39;:         &#39;c&#39;,
-                 &#39;combustion_chamber&#39;: &#39;cc&#39;,
-                 &#39;turbine&#39;:            &#39;t&#39;,
-                 &#39;afterburner&#39;:        &#39;ab&#39;,
-                 &#39;nozzle&#39;:             &#39;n&#39;
-                 }
-
-        code = codes[c.__class__.__name__] + self._n_instances(c)
-        return f&#39;{self.stream_id}.{code}&#39;
+        return [c.stage for c in self.components]
 
     def fmf(self):
         &#34;&#34;&#34;
@@ -256,6 +255,45 @@ class stream:
             if hasattr(c, &#39;fuel&#39;) and hasattr(c.fuel, &#39;mf&#39;):
                 fmf += c.fuel.mf
         return fmf
+
+    def v_exit(self):
+        &#34;&#34;&#34;
+        Flow exit velocity
+
+        Assumptions:
+        - If the flow is not choked:
+             The thermal energy lost by the gas as it leaves the nozzle
+             is transformed into kinetic energy without losses.
+        - If the flow is choked:
+             The exit velocity is the velocity of sound before the nozzle
+             exit.
+        &#34;&#34;&#34;
+        t_before_nozzle = self.components[-2].t0
+
+        if self.choked:
+            return (self.gas.k(t_before_nozzle)*R*t_before_nozzle)**0.5                     # M=1 at nozzle exit
+        else:
+            return (2*self.gas.cp(t_before_nozzle)*(t_before_nozzle - self.gas.t0))**0.5    # Heat -&gt; Kinetic energy
+
+    def A_exit(self):
+        &#34;&#34;&#34;
+        Nozzle exit area
+        &#34;&#34;&#34;
+        return self.gas.mf*R*self.gas.t0/(self.gas.p0*self.v_exit())
+
+    def thrust(self):
+        &#34;&#34;&#34;
+        Flow thrust
+        &#34;&#34;&#34;
+        p_before_nozzle = self.components[-2].p0
+
+        if self.choked:
+            return self.gas.mf*(self.v_exit()-self.gas.v_0) + self.A_exit()*(self.gas.p0-self.gas.p_0)
+        else:
+            return self.gas.mf*(self.v_exit()-self.gas.v_0)
+
+    def efficiency(self):
+        pass
 
     def t0(self):
         &#34;&#34;&#34;
@@ -269,7 +307,7 @@ class stream:
         &#34;&#34;&#34;
         return np.array([c.p0 for c in self.components])
 
-    def v0(self):
+    def V(self):
         &#34;&#34;&#34;
         Specific total volume vector.
         &#34;&#34;&#34;
@@ -322,7 +360,7 @@ class stream:
 
         further_custom = {**defaults, **kwargs}
 
-        self.plot_cycle_graph(self.v0(), self.p0()/1000,
+        self.plot_cycle_graph(self.V(), self.p0()/1000,
                               color=color,
                               label=label,
                               show=show,
@@ -440,12 +478,6 @@ class system:
     def _append(self):
         pass
 
-    def thrust(self):
-        pass
-
-    def efficiency(self):
-        pass
-
     def plot_T_p(self):
 
         plotters = []
@@ -468,7 +500,7 @@ class system:
         for stream in self.streams:
             plotters.append(lambda s, x, y: s.plot_cycle_graph(x=x, y=y, lable=None, x_label=&#39;&#39;, y_label=&#39;&#39;))
             x.append(stream.p0())
-            y.append(stream.v0())
+            y.append(stream.V())
 
         comparison(x=x, y=y, f=plotters)
 
@@ -481,7 +513,7 @@ class system:
         for stream in self.streams:
             plotters.append(lambda s, x, y: s.plot_cycle_graph(x=x, y=y, lable=None, x_label=&#39;&#39;, y_label=&#39;&#39;))
             x.append(stream.p0())
-            y.append(stream.v0())
+            y.append(stream.V())
 
         comparison(x=x, y=y, f=plotters)
 
@@ -757,24 +789,41 @@ exert work on the gas (fan, compressors).</p></div>
             c(self.gas)
             c.stage = self._stage_name(c)
 
+            if hasattr(c, &#39;choked&#39;) and c.choked:
+                self.choked = c.choked
+
         if log:
             for c in self.components:
                 section_name = join_set_distance(c.stage, c.__class__.__name__.capitalize().replace(&#34;_&#34;, &#34; &#34;), 6)
                 print_color(section_name, &#39;green&#39;)
 
                 if c.__class__.__name__ == &#39;nozzle&#39;:
-                    if c.PI == 1/c.inv_pi_crit(self.gas):
+                    if c.choked:
                         print_color(&#39;      Choked flow&#39;, &#39;red&#39;)
 
                 print_result(&#39;       T0&#39;, c.t0, &#39;[K]&#39;)
                 print_result(&#39;       p0&#39;, c.p0, &#39;[Pa]&#39;)
 
-    def stages(self):
+    def _stage_name(self, c):
         &#34;&#34;&#34;
-        Return a list containing the stage name of each
-        component in the stream.
+        Return the stage name of a component in the stream,
+        composed of the stream identification number, a code
+        representing its parent class, and a numerical index
+        if there are more than 1 components of the same class
+        in the stream.
         &#34;&#34;&#34;
-        return [c.stage for c in self.components]
+        codes = {&#39;intake&#39;:             &#39;it&#39;,
+                 &#39;inlet&#39;:              &#39;il&#39;,
+                 &#39;fan&#39;:                &#39;fn&#39;,
+                 &#39;compressor&#39;:         &#39;c&#39;,
+                 &#39;combustion_chamber&#39;: &#39;cc&#39;,
+                 &#39;turbine&#39;:            &#39;t&#39;,
+                 &#39;afterburner&#39;:        &#39;ab&#39;,
+                 &#39;nozzle&#39;:             &#39;n&#39;
+                 }
+
+        code = codes[c.__class__.__name__] + self._n_instances(c)
+        return f&#39;{self.stream_id}.{code}&#39;
 
     def _n_instances(self, comp):
         &#34;&#34;&#34;
@@ -811,26 +860,12 @@ exert work on the gas (fan, compressors).</p></div>
 
         return &#39;&#39; if n == 0 else str(n)
 
-    def _stage_name(self, c):
+    def stages(self):
         &#34;&#34;&#34;
-        Return the stage name of a component in the stream,
-        composed of the stream identification number, a code
-        representing its parent class, and a numerical index
-        if there are more than 1 components of the same class
-        in the stream.
+        Return a list containing the stage name of each
+        component in the stream.
         &#34;&#34;&#34;
-        codes = {&#39;intake&#39;:             &#39;it&#39;,
-                 &#39;inlet&#39;:              &#39;il&#39;,
-                 &#39;fan&#39;:                &#39;fn&#39;,
-                 &#39;compressor&#39;:         &#39;c&#39;,
-                 &#39;combustion_chamber&#39;: &#39;cc&#39;,
-                 &#39;turbine&#39;:            &#39;t&#39;,
-                 &#39;afterburner&#39;:        &#39;ab&#39;,
-                 &#39;nozzle&#39;:             &#39;n&#39;
-                 }
-
-        code = codes[c.__class__.__name__] + self._n_instances(c)
-        return f&#39;{self.stream_id}.{code}&#39;
+        return [c.stage for c in self.components]
 
     def fmf(self):
         &#34;&#34;&#34;
@@ -841,6 +876,45 @@ exert work on the gas (fan, compressors).</p></div>
             if hasattr(c, &#39;fuel&#39;) and hasattr(c.fuel, &#39;mf&#39;):
                 fmf += c.fuel.mf
         return fmf
+
+    def v_exit(self):
+        &#34;&#34;&#34;
+        Flow exit velocity
+
+        Assumptions:
+        - If the flow is not choked:
+             The thermal energy lost by the gas as it leaves the nozzle
+             is transformed into kinetic energy without losses.
+        - If the flow is choked:
+             The exit velocity is the velocity of sound before the nozzle
+             exit.
+        &#34;&#34;&#34;
+        t_before_nozzle = self.components[-2].t0
+
+        if self.choked:
+            return (self.gas.k(t_before_nozzle)*R*t_before_nozzle)**0.5                     # M=1 at nozzle exit
+        else:
+            return (2*self.gas.cp(t_before_nozzle)*(t_before_nozzle - self.gas.t0))**0.5    # Heat -&gt; Kinetic energy
+
+    def A_exit(self):
+        &#34;&#34;&#34;
+        Nozzle exit area
+        &#34;&#34;&#34;
+        return self.gas.mf*R*self.gas.t0/(self.gas.p0*self.v_exit())
+
+    def thrust(self):
+        &#34;&#34;&#34;
+        Flow thrust
+        &#34;&#34;&#34;
+        p_before_nozzle = self.components[-2].p0
+
+        if self.choked:
+            return self.gas.mf*(self.v_exit()-self.gas.v_0) + self.A_exit()*(self.gas.p0-self.gas.p_0)
+        else:
+            return self.gas.mf*(self.v_exit()-self.gas.v_0)
+
+    def efficiency(self):
+        pass
 
     def t0(self):
         &#34;&#34;&#34;
@@ -854,7 +928,7 @@ exert work on the gas (fan, compressors).</p></div>
         &#34;&#34;&#34;
         return np.array([c.p0 for c in self.components])
 
-    def v0(self):
+    def V(self):
         &#34;&#34;&#34;
         Specific total volume vector.
         &#34;&#34;&#34;
@@ -907,7 +981,7 @@ exert work on the gas (fan, compressors).</p></div>
 
         further_custom = {**defaults, **kwargs}
 
-        self.plot_cycle_graph(self.v0(), self.p0()/1000,
+        self.plot_cycle_graph(self.V(), self.p0()/1000,
                               color=color,
                               label=label,
                               show=show,
@@ -989,6 +1063,22 @@ exert work on the gas (fan, compressors).</p></div>
 </details>
 <h3>Methods</h3>
 <dl>
+<dt id="huracan.engine.stream.A_exit"><code class="name flex">
+<span>def <span class="ident">A_exit</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Nozzle exit area</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def A_exit(self):
+    &#34;&#34;&#34;
+    Nozzle exit area
+    &#34;&#34;&#34;
+    return self.gas.mf*R*self.gas.t0/(self.gas.p0*self.v_exit())</code></pre>
+</details>
+</dd>
 <dt id="huracan.engine.stream.S"><code class="name flex">
 <span>def <span class="ident">S</span></span>(<span>self)</span>
 </code></dt>
@@ -1004,6 +1094,35 @@ exert work on the gas (fan, compressors).</p></div>
     &#34;&#34;&#34;
     S = lambda t0, p0: 1
     return np.array([S(t0=c.t0, p0=c.p0) for c in self.components])</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.stream.V"><code class="name flex">
+<span>def <span class="ident">V</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Specific total volume vector.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def V(self):
+    &#34;&#34;&#34;
+    Specific total volume vector.
+    &#34;&#34;&#34;
+    return np.array([c.t0*R/c.p0 for c in self.components])</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.stream.efficiency"><code class="name flex">
+<span>def <span class="ident">efficiency</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def efficiency(self):
+    pass</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.fmf"><code class="name flex">
@@ -1201,7 +1320,7 @@ class arguments can be passed to this function.</p></div>
 
     further_custom = {**defaults, **kwargs}
 
-    self.plot_cycle_graph(self.v0(), self.p0()/1000,
+    self.plot_cycle_graph(self.V(), self.p0()/1000,
                           color=color,
                           label=label,
                           show=show,
@@ -1231,13 +1350,16 @@ on the instance's gas class instance.</p></div>
         c(self.gas)
         c.stage = self._stage_name(c)
 
+        if hasattr(c, &#39;choked&#39;) and c.choked:
+            self.choked = c.choked
+
     if log:
         for c in self.components:
             section_name = join_set_distance(c.stage, c.__class__.__name__.capitalize().replace(&#34;_&#34;, &#34; &#34;), 6)
             print_color(section_name, &#39;green&#39;)
 
             if c.__class__.__name__ == &#39;nozzle&#39;:
-                if c.PI == 1/c.inv_pi_crit(self.gas):
+                if c.choked:
                     print_color(&#39;      Choked flow&#39;, &#39;red&#39;)
 
             print_result(&#39;       T0&#39;, c.t0, &#39;[K]&#39;)
@@ -1278,20 +1400,61 @@ component in the stream.</p></div>
     return np.array([c.t0 for c in self.components])</code></pre>
 </details>
 </dd>
-<dt id="huracan.engine.stream.v0"><code class="name flex">
-<span>def <span class="ident">v0</span></span>(<span>self)</span>
+<dt id="huracan.engine.stream.thrust"><code class="name flex">
+<span>def <span class="ident">thrust</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Specific total volume vector.</p></div>
+<div class="desc"><p>Flow thrust</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def v0(self):
+<pre><code class="python">def thrust(self):
     &#34;&#34;&#34;
-    Specific total volume vector.
+    Flow thrust
     &#34;&#34;&#34;
-    return np.array([c.t0*R/c.p0 for c in self.components])</code></pre>
+    p_before_nozzle = self.components[-2].p0
+
+    if self.choked:
+        return self.gas.mf*(self.v_exit()-self.gas.v_0) + self.A_exit()*(self.gas.p0-self.gas.p_0)
+    else:
+        return self.gas.mf*(self.v_exit()-self.gas.v_0)</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.stream.v_exit"><code class="name flex">
+<span>def <span class="ident">v_exit</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Flow exit velocity</p>
+<p>Assumptions:
+- If the flow is not choked:
+The thermal energy lost by the gas as it leaves the nozzle
+is transformed into kinetic energy without losses.
+- If the flow is choked:
+The exit velocity is the velocity of sound before the nozzle
+exit.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def v_exit(self):
+    &#34;&#34;&#34;
+    Flow exit velocity
+
+    Assumptions:
+    - If the flow is not choked:
+         The thermal energy lost by the gas as it leaves the nozzle
+         is transformed into kinetic energy without losses.
+    - If the flow is choked:
+         The exit velocity is the velocity of sound before the nozzle
+         exit.
+    &#34;&#34;&#34;
+    t_before_nozzle = self.components[-2].t0
+
+    if self.choked:
+        return (self.gas.k(t_before_nozzle)*R*t_before_nozzle)**0.5                     # M=1 at nozzle exit
+    else:
+        return (2*self.gas.cp(t_before_nozzle)*(t_before_nozzle - self.gas.t0))**0.5    # Heat -&gt; Kinetic energy</code></pre>
 </details>
 </dd>
 </dl>
@@ -1345,12 +1508,6 @@ component in the stream.</p></div>
     def _append(self):
         pass
 
-    def thrust(self):
-        pass
-
-    def efficiency(self):
-        pass
-
     def plot_T_p(self):
 
         plotters = []
@@ -1373,7 +1530,7 @@ component in the stream.</p></div>
         for stream in self.streams:
             plotters.append(lambda s, x, y: s.plot_cycle_graph(x=x, y=y, lable=None, x_label=&#39;&#39;, y_label=&#39;&#39;))
             x.append(stream.p0())
-            y.append(stream.v0())
+            y.append(stream.V())
 
         comparison(x=x, y=y, f=plotters)
 
@@ -1386,25 +1543,12 @@ component in the stream.</p></div>
         for stream in self.streams:
             plotters.append(lambda s, x, y: s.plot_cycle_graph(x=x, y=y, lable=None, x_label=&#39;&#39;, y_label=&#39;&#39;))
             x.append(stream.p0())
-            y.append(stream.v0())
+            y.append(stream.V())
 
         comparison(x=x, y=y, f=plotters)</code></pre>
 </details>
 <h3>Methods</h3>
 <dl>
-<dt id="huracan.engine.system.efficiency"><code class="name flex">
-<span>def <span class="ident">efficiency</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def efficiency(self):
-    pass</code></pre>
-</details>
-</dd>
 <dt id="huracan.engine.system.plot_T_S"><code class="name flex">
 <span>def <span class="ident">plot_T_S</span></span>(<span>self)</span>
 </code></dt>
@@ -1423,7 +1567,7 @@ component in the stream.</p></div>
     for stream in self.streams:
         plotters.append(lambda s, x, y: s.plot_cycle_graph(x=x, y=y, lable=None, x_label=&#39;&#39;, y_label=&#39;&#39;))
         x.append(stream.p0())
-        y.append(stream.v0())
+        y.append(stream.V())
 
     comparison(x=x, y=y, f=plotters)</code></pre>
 </details>
@@ -1469,22 +1613,9 @@ component in the stream.</p></div>
     for stream in self.streams:
         plotters.append(lambda s, x, y: s.plot_cycle_graph(x=x, y=y, lable=None, x_label=&#39;&#39;, y_label=&#39;&#39;))
         x.append(stream.p0())
-        y.append(stream.v0())
+        y.append(stream.V())
 
     comparison(x=x, y=y, f=plotters)</code></pre>
-</details>
-</dd>
-<dt id="huracan.engine.system.thrust"><code class="name flex">
-<span>def <span class="ident">thrust</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def thrust(self):
-    pass</code></pre>
 </details>
 </dd>
 </dl>
@@ -1518,7 +1649,10 @@ component in the stream.</p></div>
 <li>
 <h4><code><a title="huracan.engine.stream" href="#huracan.engine.stream">stream</a></code></h4>
 <ul class="two-column">
+<li><code><a title="huracan.engine.stream.A_exit" href="#huracan.engine.stream.A_exit">A_exit</a></code></li>
 <li><code><a title="huracan.engine.stream.S" href="#huracan.engine.stream.S">S</a></code></li>
+<li><code><a title="huracan.engine.stream.V" href="#huracan.engine.stream.V">V</a></code></li>
+<li><code><a title="huracan.engine.stream.efficiency" href="#huracan.engine.stream.efficiency">efficiency</a></code></li>
 <li><code><a title="huracan.engine.stream.fmf" href="#huracan.engine.stream.fmf">fmf</a></code></li>
 <li><code><a title="huracan.engine.stream.p0" href="#huracan.engine.stream.p0">p0</a></code></li>
 <li><code><a title="huracan.engine.stream.plot_T_S" href="#huracan.engine.stream.plot_T_S">plot_T_S</a></code></li>
@@ -1528,17 +1662,16 @@ component in the stream.</p></div>
 <li><code><a title="huracan.engine.stream.run" href="#huracan.engine.stream.run">run</a></code></li>
 <li><code><a title="huracan.engine.stream.stages" href="#huracan.engine.stream.stages">stages</a></code></li>
 <li><code><a title="huracan.engine.stream.t0" href="#huracan.engine.stream.t0">t0</a></code></li>
-<li><code><a title="huracan.engine.stream.v0" href="#huracan.engine.stream.v0">v0</a></code></li>
+<li><code><a title="huracan.engine.stream.thrust" href="#huracan.engine.stream.thrust">thrust</a></code></li>
+<li><code><a title="huracan.engine.stream.v_exit" href="#huracan.engine.stream.v_exit">v_exit</a></code></li>
 </ul>
 </li>
 <li>
 <h4><code><a title="huracan.engine.system" href="#huracan.engine.system">system</a></code></h4>
 <ul class="">
-<li><code><a title="huracan.engine.system.efficiency" href="#huracan.engine.system.efficiency">efficiency</a></code></li>
 <li><code><a title="huracan.engine.system.plot_T_S" href="#huracan.engine.system.plot_T_S">plot_T_S</a></code></li>
 <li><code><a title="huracan.engine.system.plot_T_p" href="#huracan.engine.system.plot_T_p">plot_T_p</a></code></li>
 <li><code><a title="huracan.engine.system.plot_p_v" href="#huracan.engine.system.plot_p_v">plot_p_v</a></code></li>
-<li><code><a title="huracan.engine.system.thrust" href="#huracan.engine.system.thrust">thrust</a></code></li>
 </ul>
 </li>
 </ul>
