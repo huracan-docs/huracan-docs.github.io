@@ -35,28 +35,31 @@ from huracan.thermo.processes import absolute, diffusion, compression, combustio
 
 class fluid:
     &#34;&#34;&#34;
-    Fluid class
+    Fluid
+    -----
     &#34;&#34;&#34;
     @classmethod
-    def _diversion(cls, fluid, fraction):
+    def _diversion(cls, f, fr):
         &#34;&#34;&#34;
         Fluid diversion.
+        - Diverted flow mass flow:       fraction*mf
+        - Main flow mass flow:       (1-fraction)*mf
 
-        :param fluid:    Fluid to be diverted.
-        :param fraction: Fraction of diverted fluid.
+        :param f:  Fluid to be diverted.
+        :param fr: Fraction of diverted fluid.
 
-        :type fluid:     mixture or fluid
-        :type fraction:  float &lt; 1
+        :type f:   mixture or fluid
+        :type fr:  0 &lt;= float &lt;= 1
 
-        :return:         [fluid] Core flow
-                         [fluid] Diverted flow
+        :return:   [fluid] Main flow
+                   [fluid] Diverted flow
         &#34;&#34;&#34;
-        div_f = deepcopy(fluid)
+        mf, df = deepcopy(f), deepcopy(f)
 
-        div_f.mf *= fraction
-        fluid.mf *= 1 - fraction
+        mf.mf *= 1 - fr
+        df.mf *= fr
 
-        return fluid, div_f
+        return mf, df
 
     def __mul__(self, other):
         &#34;&#34;&#34;
@@ -73,7 +76,13 @@ class fluid:
 
 class gas(fluid):
     &#34;&#34;&#34;
-    Ideal gas class
+    Ideal gas model
+    ---------------
+
+    All gas phenomena are modelled using its
+    - Mass flow
+    - Constant pressure specific heat capacity
+    - Ratio of specific heat capacities
     &#34;&#34;&#34;
     def __init__(self, mf, cp, k,
                  m, t_0, p_0):
@@ -103,6 +112,17 @@ class gas(fluid):
         self.p_0 = p_0
 
         self.absolute()
+
+    def state(self):
+        &#34;&#34;&#34;
+        Update gas state variables.
+        - V - Specific volume
+        - S - Specific entropy
+        - H - Specific enthalpy
+        &#34;&#34;&#34;
+        self.V = self.t0*R/self.p0
+        self.S = 1                          #TODO: implement
+        self.H = 1                          #TODO: implement
 
     def __add__(self, other):
         &#34;&#34;&#34;
@@ -157,6 +177,8 @@ class gas(fluid):
         self.t0 = p.t0
         self.p0 = p.p0
 
+        self.state()
+
         return p
 
     def diffusion(self, eta,
@@ -196,10 +218,14 @@ class gas(fluid):
                       eta = eta,
                       PI  = PI,
                       TAU = TAU,
+                      t0  = self.t0 if hasattr(self, &#39;t0&#39;) else None,
+                      p0  = self.p0 if hasattr(self, &#39;p0&#39;) else None
                       )
 
         self.t0 = p.t01
         self.p0 = p.p01
+
+        self.state()
 
         return p
 
@@ -248,6 +274,8 @@ class gas(fluid):
         self.t0 = p.t01
         self.p0 = p.p01
 
+        self.state()
+
         return p
 
     def expansion(self, eta,
@@ -295,12 +323,16 @@ class gas(fluid):
         self.t0 = p.t01
         self.p0 = p.p01
 
+        self.state()
+
         return p
 
-    def heat_addition(self, eta,
+    def heat_addition(self,
+                      eta,
                       cp,
                       fuel_mf,
-                      fuel_LHV):
+                      fuel_LHV,
+                      PI=1):
         &#34;&#34;&#34;
         Constant pressure heat addition
         -------------------------------
@@ -321,17 +353,21 @@ class gas(fluid):
                        p00      = self.p0,
                        fuel_mf  = fuel_mf,
                        fuel_LHV = fuel_LHV,
-                       eta      = eta)
+                       eta      = eta,
+                       PI       = PI)
 
         self.t0 = p.t01
         self.p0 = p.p01
+
+        self.state()
 
         return p
 
 
 class fuel:
     &#34;&#34;&#34;
-    Fuel class
+    Fuel model
+    ----------
     &#34;&#34;&#34;
     def __init__(self, LHV,
                  mf=None):
@@ -345,7 +381,8 @@ class fuel:
 
 class mixture(gas):
     &#34;&#34;&#34;
-    Mixture class
+    Mixture model
+    -------------
     &#34;&#34;&#34;
 
     @classmethod
@@ -399,49 +436,7 @@ class mixture(gas):
                          k   = self._mix_k(gas1, gas2),
                          m   = 0,
                          t_0 = self._mix_t0(gas1, gas2),
-                         p_0 = self._mix_p0(gas1, gas2))
-
-
-if __name__ == &#39;__main__&#39;:
-
-    mf = 700
-    m  = 0.6
-    t  = 288
-    p  = 101325
-    fr = 0
-
-    g = gas(mf = mf,
-            cp = lambda T: 1150 if T &gt; 600 else 1000,
-            k  = lambda T: 1.33 if T &gt; 600 else 1.4,
-            m  = m, t_0=t, p_0=p)
-
-    f = gas(mf = mf,
-            cp = lambda T: 1150 if T &gt; 600 else 1000,
-            k  = lambda T: 1.33 if T &gt; 600 else 1.4,
-            m  = m, t_0=t*fr, p_0=p*fr)
-
-    k = gas(mf = mf,
-            cp = lambda T: 1500 if T &gt; 1000 else 1200 if T &gt; 800 else 400,
-            k  = lambda T: 1.33 if T &gt; 600 else 1.4,
-            m  = m, t_0=t*fr, p_0=p*fr)
-
-    def t_mixture():
-        global h
-        h = g+f
-
-        assert abs(h.t0 - g.t0/2) &lt; 10e-12
-        assert abs(h.p0 - g.p0/2) &lt; 10e-12
-
-    def t_diversion():
-        mf = h.mf
-        fr = 0.2
-        i, j = fr*h
-
-        assert i.mf == mf*(1-fr)
-        assert j.mf == mf*fr
-
-    t_mixture()
-    t_diversion()</code></pre>
+                         p_0 = self._mix_p0(gas1, gas2))</code></pre>
 </details>
 </section>
 <section>
@@ -457,35 +452,38 @@ if __name__ == &#39;__main__&#39;:
 <span>class <span class="ident">fluid</span></span>
 </code></dt>
 <dd>
-<div class="desc"><p>Fluid class</p></div>
+<div class="desc"><h2 id="fluid">Fluid</h2></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">class fluid:
     &#34;&#34;&#34;
-    Fluid class
+    Fluid
+    -----
     &#34;&#34;&#34;
     @classmethod
-    def _diversion(cls, fluid, fraction):
+    def _diversion(cls, f, fr):
         &#34;&#34;&#34;
         Fluid diversion.
+        - Diverted flow mass flow:       fraction*mf
+        - Main flow mass flow:       (1-fraction)*mf
 
-        :param fluid:    Fluid to be diverted.
-        :param fraction: Fraction of diverted fluid.
+        :param f:  Fluid to be diverted.
+        :param fr: Fraction of diverted fluid.
 
-        :type fluid:     mixture or fluid
-        :type fraction:  float &lt; 1
+        :type f:   mixture or fluid
+        :type fr:  0 &lt;= float &lt;= 1
 
-        :return:         [fluid] Core flow
-                         [fluid] Diverted flow
+        :return:   [fluid] Main flow
+                   [fluid] Diverted flow
         &#34;&#34;&#34;
-        div_f = deepcopy(fluid)
+        mf, df = deepcopy(f), deepcopy(f)
 
-        div_f.mf *= fraction
-        fluid.mf *= 1 - fraction
+        mf.mf *= 1 - fr
+        df.mf *= fr
 
-        return fluid, div_f
+        return mf, df
 
     def __mul__(self, other):
         &#34;&#34;&#34;
@@ -509,7 +507,7 @@ if __name__ == &#39;__main__&#39;:
 <span>(</span><span>LHV, mf=None)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Fuel class</p>
+<div class="desc"><h2 id="fuel-model">Fuel Model</h2>
 <p>:param LHV: Fuel Lower Heating Value (heat of combustion)
 :param mf:
 Fuel mass flow</p></div>
@@ -519,7 +517,8 @@ Fuel mass flow</p></div>
 </summary>
 <pre><code class="python">class fuel:
     &#34;&#34;&#34;
-    Fuel class
+    Fuel model
+    ----------
     &#34;&#34;&#34;
     def __init__(self, LHV,
                  mf=None):
@@ -536,7 +535,11 @@ Fuel mass flow</p></div>
 <span>(</span><span>mf, cp, k, m, t_0, p_0)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Ideal gas class</p>
+<div class="desc"><h2 id="ideal-gas-model">Ideal Gas Model</h2>
+<p>All gas phenomena are modelled using its
+- Mass flow
+- Constant pressure specific heat capacity
+- Ratio of specific heat capacities</p>
 <p>:param mf:
 [kg] Mass flow
 :param cp:
@@ -572,7 +575,13 @@ float</p></div>
 </summary>
 <pre><code class="python">class gas(fluid):
     &#34;&#34;&#34;
-    Ideal gas class
+    Ideal gas model
+    ---------------
+
+    All gas phenomena are modelled using its
+    - Mass flow
+    - Constant pressure specific heat capacity
+    - Ratio of specific heat capacities
     &#34;&#34;&#34;
     def __init__(self, mf, cp, k,
                  m, t_0, p_0):
@@ -602,6 +611,17 @@ float</p></div>
         self.p_0 = p_0
 
         self.absolute()
+
+    def state(self):
+        &#34;&#34;&#34;
+        Update gas state variables.
+        - V - Specific volume
+        - S - Specific entropy
+        - H - Specific enthalpy
+        &#34;&#34;&#34;
+        self.V = self.t0*R/self.p0
+        self.S = 1                          #TODO: implement
+        self.H = 1                          #TODO: implement
 
     def __add__(self, other):
         &#34;&#34;&#34;
@@ -656,6 +676,8 @@ float</p></div>
         self.t0 = p.t0
         self.p0 = p.p0
 
+        self.state()
+
         return p
 
     def diffusion(self, eta,
@@ -695,10 +717,14 @@ float</p></div>
                       eta = eta,
                       PI  = PI,
                       TAU = TAU,
+                      t0  = self.t0 if hasattr(self, &#39;t0&#39;) else None,
+                      p0  = self.p0 if hasattr(self, &#39;p0&#39;) else None
                       )
 
         self.t0 = p.t01
         self.p0 = p.p01
+
+        self.state()
 
         return p
 
@@ -747,6 +773,8 @@ float</p></div>
         self.t0 = p.t01
         self.p0 = p.p01
 
+        self.state()
+
         return p
 
     def expansion(self, eta,
@@ -794,12 +822,16 @@ float</p></div>
         self.t0 = p.t01
         self.p0 = p.p01
 
+        self.state()
+
         return p
 
-    def heat_addition(self, eta,
+    def heat_addition(self,
+                      eta,
                       cp,
                       fuel_mf,
-                      fuel_LHV):
+                      fuel_LHV,
+                      PI=1):
         &#34;&#34;&#34;
         Constant pressure heat addition
         -------------------------------
@@ -820,10 +852,13 @@ float</p></div>
                        p00      = self.p0,
                        fuel_mf  = fuel_mf,
                        fuel_LHV = fuel_LHV,
-                       eta      = eta)
+                       eta      = eta,
+                       PI       = PI)
 
         self.t0 = p.t01
         self.p0 = p.p01
+
+        self.state()
 
         return p</code></pre>
 </details>
@@ -865,6 +900,8 @@ flowing at a certain Mach number.</p>
 
     self.t0 = p.t0
     self.p0 = p.p0
+
+    self.state()
 
     return p</code></pre>
 </details>
@@ -946,6 +983,8 @@ process instance</p></div>
     self.t0 = p.t01
     self.p0 = p.p01
 
+    self.state()
+
     return p</code></pre>
 </details>
 </dd>
@@ -1013,10 +1052,14 @@ process instance</p></div>
                   eta = eta,
                   PI  = PI,
                   TAU = TAU,
+                  t0  = self.t0 if hasattr(self, &#39;t0&#39;) else None,
+                  p0  = self.p0 if hasattr(self, &#39;p0&#39;) else None
                   )
 
     self.t0 = p.t01
     self.p0 = p.p01
+
+    self.state()
 
     return p</code></pre>
 </details>
@@ -1098,11 +1141,13 @@ process instance</p></div>
     self.t0 = p.t01
     self.p0 = p.p01
 
+    self.state()
+
     return p</code></pre>
 </details>
 </dd>
 <dt id="huracan.thermo.fluids.gas.heat_addition"><code class="name flex">
-<span>def <span class="ident">heat_addition</span></span>(<span>self, eta, cp, fuel_mf, fuel_LHV)</span>
+<span>def <span class="ident">heat_addition</span></span>(<span>self, eta, cp, fuel_mf, fuel_LHV, PI=1)</span>
 </code></dt>
 <dd>
 <div class="desc"><h2 id="constant-pressure-heat-addition">Constant Pressure Heat Addition</h2>
@@ -1120,10 +1165,12 @@ Fuel mass flow
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def heat_addition(self, eta,
+<pre><code class="python">def heat_addition(self,
+                  eta,
                   cp,
                   fuel_mf,
-                  fuel_LHV):
+                  fuel_LHV,
+                  PI=1):
     &#34;&#34;&#34;
     Constant pressure heat addition
     -------------------------------
@@ -1144,12 +1191,39 @@ Fuel mass flow
                    p00      = self.p0,
                    fuel_mf  = fuel_mf,
                    fuel_LHV = fuel_LHV,
-                   eta      = eta)
+                   eta      = eta,
+                   PI       = PI)
 
     self.t0 = p.t01
     self.p0 = p.p01
 
+    self.state()
+
     return p</code></pre>
+</details>
+</dd>
+<dt id="huracan.thermo.fluids.gas.state"><code class="name flex">
+<span>def <span class="ident">state</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Update gas state variables.
+- V - Specific volume
+- S - Specific entropy
+- H - Specific enthalpy</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def state(self):
+    &#34;&#34;&#34;
+    Update gas state variables.
+    - V - Specific volume
+    - S - Specific entropy
+    - H - Specific enthalpy
+    &#34;&#34;&#34;
+    self.V = self.t0*R/self.p0
+    self.S = 1                          #TODO: implement
+    self.H = 1                          #TODO: implement</code></pre>
 </details>
 </dd>
 </dl>
@@ -1159,7 +1233,7 @@ Fuel mass flow
 <span>(</span><span>gas1, gas2)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Mixture class</p>
+<div class="desc"><h2 id="mixture-model">Mixture Model</h2>
 <p>:param gas1: Mixture fluid 1
 :param gas2: Mixture fluid 2</p>
 <p>:type gas1:
@@ -1172,7 +1246,8 @@ gas or mixture</p></div>
 </summary>
 <pre><code class="python">class mixture(gas):
     &#34;&#34;&#34;
-    Mixture class
+    Mixture model
+    -------------
     &#34;&#34;&#34;
 
     @classmethod
@@ -1242,6 +1317,7 @@ gas or mixture</p></div>
 <li><code><a title="huracan.thermo.fluids.gas.diffusion" href="#huracan.thermo.fluids.gas.diffusion">diffusion</a></code></li>
 <li><code><a title="huracan.thermo.fluids.gas.expansion" href="#huracan.thermo.fluids.gas.expansion">expansion</a></code></li>
 <li><code><a title="huracan.thermo.fluids.gas.heat_addition" href="#huracan.thermo.fluids.gas.heat_addition">heat_addition</a></code></li>
+<li><code><a title="huracan.thermo.fluids.gas.state" href="#huracan.thermo.fluids.gas.state">state</a></code></li>
 </ul>
 </li>
 </ul>
@@ -1270,12 +1346,13 @@ gas or mixture</p></div>
 </li>
 <li>
 <h4><code><a title="huracan.thermo.fluids.gas" href="#huracan.thermo.fluids.gas">gas</a></code></h4>
-<ul class="">
+<ul class="two-column">
 <li><code><a title="huracan.thermo.fluids.gas.absolute" href="#huracan.thermo.fluids.gas.absolute">absolute</a></code></li>
 <li><code><a title="huracan.thermo.fluids.gas.compression" href="#huracan.thermo.fluids.gas.compression">compression</a></code></li>
 <li><code><a title="huracan.thermo.fluids.gas.diffusion" href="#huracan.thermo.fluids.gas.diffusion">diffusion</a></code></li>
 <li><code><a title="huracan.thermo.fluids.gas.expansion" href="#huracan.thermo.fluids.gas.expansion">expansion</a></code></li>
 <li><code><a title="huracan.thermo.fluids.gas.heat_addition" href="#huracan.thermo.fluids.gas.heat_addition">heat_addition</a></code></li>
+<li><code><a title="huracan.thermo.fluids.gas.state" href="#huracan.thermo.fluids.gas.state">state</a></code></li>
 </ul>
 </li>
 <li>

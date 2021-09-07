@@ -42,6 +42,7 @@ class combustor(component):
     def __init__(self,
                  fuel,
                  eta,
+                 PI=1,
                  t01=None,
                  ):
         &#34;&#34;&#34;
@@ -71,6 +72,7 @@ class combustor(component):
 
         self.fuel = fuel
         self.eta  = eta
+        self.PI   = PI
         self.t01  = t01
 
     def tf(self, gas):
@@ -83,10 +85,12 @@ class combustor(component):
         at which the combustion process takes place.
         &#34;&#34;&#34;
 
-        assert hasattr(self, &#39;fuel_mf&#39;) or not isinstance(self.fuel.mf, type(None)), \
+        assert hasattr(self, &#39;fmf&#39;), \
             &#39;Component incorporating combustor has no fuel mass flow method implemented.&#39;
 
-        self.fuel_mf(gas)
+        self.fmf(gas)
+
+        self.Q = self.fuel.mf*self.eta*self.fuel.LHV      # Heat added to the flow
 
         approx_process_t = deepcopy(gas).heat_addition(eta=self.eta,
                                                        cp=gas.cp(gas.t0),
@@ -94,6 +98,7 @@ class combustor(component):
                                                        fuel_LHV=self.fuel.LHV).t01
 
         return gas.heat_addition(eta=self.eta,
+                                 PI=self.PI,
                                  cp=gas.cp(approx_process_t),
                                  fuel_mf=self.fuel.mf,
                                  fuel_LHV=self.fuel.LHV)
@@ -116,6 +121,7 @@ class combustion_chamber(combustor):
     def __init__(self,
                  fuel,
                  eta,
+                 PI=1,
                  t01=None,
                  ):
         &#34;&#34;&#34;
@@ -150,9 +156,10 @@ class combustion_chamber(combustor):
         &#34;&#34;&#34;
         super().__init__(fuel=fuel,
                          eta=eta,
+                         PI=PI,
                          t01=t01)
 
-    def fuel_mf(self, gas):
+    def fmf(self, gas):
         &#34;&#34;&#34;
         At the time of execution, the fuel mass flow is
         determined based on:
@@ -212,14 +219,15 @@ class combustion_chamber(combustor):
 
 class afterburner(combustor):
     &#34;&#34;&#34;
-    Afterburner/Reheater
-    --------------------
+    Afterburner or Reheater
+    -----------------------
 
     Constant pressure heat addition.
     &#34;&#34;&#34;
     def __init__(self,
                  fuel,
                  eta,
+                 PI=1,
                  t01=None):
         &#34;&#34;&#34;
         The total pressure and temperature
@@ -247,9 +255,10 @@ class afterburner(combustor):
         &#34;&#34;&#34;
         super().__init__(fuel=fuel,
                          eta=eta,
+                         PI=PI,
                          t01=t01)
 
-    def fuel_mf(self, gas):
+    def fmf(self, gas):
         &#34;&#34;&#34;
         At the time of execution, the fuel mass flow is
         determined based on:
@@ -284,10 +293,10 @@ class afterburner(combustor):
 <dl>
 <dt id="huracan.components.combustion.afterburner"><code class="flex name class">
 <span>class <span class="ident">afterburner</span></span>
-<span>(</span><span>fuel, eta, t01=None)</span>
+<span>(</span><span>fuel, eta, PI=1, t01=None)</span>
 </code></dt>
 <dd>
-<div class="desc"><h2 id="afterburnerreheater">Afterburner/Reheater</h2>
+<div class="desc"><h2 id="afterburner-or-reheater">Afterburner Or Reheater</h2>
 <p>Constant pressure heat addition.</p>
 <p>The total pressure and temperature
 after the afterburner are calculated
@@ -323,14 +332,15 @@ float</p></div>
 </summary>
 <pre><code class="python">class afterburner(combustor):
     &#34;&#34;&#34;
-    Afterburner/Reheater
-    --------------------
+    Afterburner or Reheater
+    -----------------------
 
     Constant pressure heat addition.
     &#34;&#34;&#34;
     def __init__(self,
                  fuel,
                  eta,
+                 PI=1,
                  t01=None):
         &#34;&#34;&#34;
         The total pressure and temperature
@@ -358,9 +368,10 @@ float</p></div>
         &#34;&#34;&#34;
         super().__init__(fuel=fuel,
                          eta=eta,
+                         PI=PI,
                          t01=t01)
 
-    def fuel_mf(self, gas):
+    def fmf(self, gas):
         &#34;&#34;&#34;
         At the time of execution, the fuel mass flow is
         determined based on:
@@ -390,8 +401,8 @@ float</p></div>
 </ul>
 <h3>Methods</h3>
 <dl>
-<dt id="huracan.components.combustion.afterburner.fuel_mf"><code class="name flex">
-<span>def <span class="ident">fuel_mf</span></span>(<span>self, gas)</span>
+<dt id="huracan.components.combustion.afterburner.fmf"><code class="name flex">
+<span>def <span class="ident">fmf</span></span>(<span>self, gas)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>At the time of execution, the fuel mass flow is
@@ -408,7 +419,7 @@ minimum mass flow</li>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def fuel_mf(self, gas):
+<pre><code class="python">def fmf(self, gas):
     &#34;&#34;&#34;
     At the time of execution, the fuel mass flow is
     determined based on:
@@ -445,7 +456,7 @@ minimum mass flow</li>
 </dd>
 <dt id="huracan.components.combustion.combustion_chamber"><code class="flex name class">
 <span>class <span class="ident">combustion_chamber</span></span>
-<span>(</span><span>fuel, eta, t01=None)</span>
+<span>(</span><span>fuel, eta, PI=1, t01=None)</span>
 </code></dt>
 <dd>
 <div class="desc"><h2 id="combustion-chamber">Combustion Chamber</h2>
@@ -499,6 +510,7 @@ float</p></div>
     def __init__(self,
                  fuel,
                  eta,
+                 PI=1,
                  t01=None,
                  ):
         &#34;&#34;&#34;
@@ -533,9 +545,10 @@ float</p></div>
         &#34;&#34;&#34;
         super().__init__(fuel=fuel,
                          eta=eta,
+                         PI=PI,
                          t01=t01)
 
-    def fuel_mf(self, gas):
+    def fmf(self, gas):
         &#34;&#34;&#34;
         At the time of execution, the fuel mass flow is
         determined based on:
@@ -645,8 +658,8 @@ chambers do not have shared turbines with the main one.</p>
     return sum(Qr)</code></pre>
 </details>
 </dd>
-<dt id="huracan.components.combustion.combustion_chamber.fuel_mf"><code class="name flex">
-<span>def <span class="ident">fuel_mf</span></span>(<span>self, gas)</span>
+<dt id="huracan.components.combustion.combustion_chamber.fmf"><code class="name flex">
+<span>def <span class="ident">fmf</span></span>(<span>self, gas)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>At the time of execution, the fuel mass flow is
@@ -664,7 +677,7 @@ minimum mass flow</li>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def fuel_mf(self, gas):
+<pre><code class="python">def fmf(self, gas):
     &#34;&#34;&#34;
     At the time of execution, the fuel mass flow is
     determined based on:
@@ -720,7 +733,7 @@ minimum mass flow</li>
 </dd>
 <dt id="huracan.components.combustion.combustor"><code class="flex name class">
 <span>class <span class="ident">combustor</span></span>
-<span>(</span><span>fuel, eta, t01=None)</span>
+<span>(</span><span>fuel, eta, PI=1, t01=None)</span>
 </code></dt>
 <dd>
 <div class="desc"><h2 id="combustor">Combustor</h2>
@@ -767,6 +780,7 @@ float</p></div>
     def __init__(self,
                  fuel,
                  eta,
+                 PI=1,
                  t01=None,
                  ):
         &#34;&#34;&#34;
@@ -796,6 +810,7 @@ float</p></div>
 
         self.fuel = fuel
         self.eta  = eta
+        self.PI   = PI
         self.t01  = t01
 
     def tf(self, gas):
@@ -808,10 +823,12 @@ float</p></div>
         at which the combustion process takes place.
         &#34;&#34;&#34;
 
-        assert hasattr(self, &#39;fuel_mf&#39;) or not isinstance(self.fuel.mf, type(None)), \
+        assert hasattr(self, &#39;fmf&#39;), \
             &#39;Component incorporating combustor has no fuel mass flow method implemented.&#39;
 
-        self.fuel_mf(gas)
+        self.fmf(gas)
+
+        self.Q = self.fuel.mf*self.eta*self.fuel.LHV      # Heat added to the flow
 
         approx_process_t = deepcopy(gas).heat_addition(eta=self.eta,
                                                        cp=gas.cp(gas.t0),
@@ -819,6 +836,7 @@ float</p></div>
                                                        fuel_LHV=self.fuel.LHV).t01
 
         return gas.heat_addition(eta=self.eta,
+                                 PI=self.PI,
                                  cp=gas.cp(approx_process_t),
                                  fuel_mf=self.fuel.mf,
                                  fuel_LHV=self.fuel.LHV)
@@ -882,10 +900,12 @@ at which the combustion process takes place.</p></div>
     at which the combustion process takes place.
     &#34;&#34;&#34;
 
-    assert hasattr(self, &#39;fuel_mf&#39;) or not isinstance(self.fuel.mf, type(None)), \
+    assert hasattr(self, &#39;fmf&#39;), \
         &#39;Component incorporating combustor has no fuel mass flow method implemented.&#39;
 
-    self.fuel_mf(gas)
+    self.fmf(gas)
+
+    self.Q = self.fuel.mf*self.eta*self.fuel.LHV      # Heat added to the flow
 
     approx_process_t = deepcopy(gas).heat_addition(eta=self.eta,
                                                    cp=gas.cp(gas.t0),
@@ -893,6 +913,7 @@ at which the combustion process takes place.</p></div>
                                                    fuel_LHV=self.fuel.LHV).t01
 
     return gas.heat_addition(eta=self.eta,
+                             PI=self.PI,
                              cp=gas.cp(approx_process_t),
                              fuel_mf=self.fuel.mf,
                              fuel_LHV=self.fuel.LHV)</code></pre>
@@ -919,14 +940,14 @@ at which the combustion process takes place.</p></div>
 <li>
 <h4><code><a title="huracan.components.combustion.afterburner" href="#huracan.components.combustion.afterburner">afterburner</a></code></h4>
 <ul class="">
-<li><code><a title="huracan.components.combustion.afterburner.fuel_mf" href="#huracan.components.combustion.afterburner.fuel_mf">fuel_mf</a></code></li>
+<li><code><a title="huracan.components.combustion.afterburner.fmf" href="#huracan.components.combustion.afterburner.fmf">fmf</a></code></li>
 </ul>
 </li>
 <li>
 <h4><code><a title="huracan.components.combustion.combustion_chamber" href="#huracan.components.combustion.combustion_chamber">combustion_chamber</a></code></h4>
 <ul class="">
 <li><code><a title="huracan.components.combustion.combustion_chamber.Q_min" href="#huracan.components.combustion.combustion_chamber.Q_min">Q_min</a></code></li>
-<li><code><a title="huracan.components.combustion.combustion_chamber.fuel_mf" href="#huracan.components.combustion.combustion_chamber.fuel_mf">fuel_mf</a></code></li>
+<li><code><a title="huracan.components.combustion.combustion_chamber.fmf" href="#huracan.components.combustion.combustion_chamber.fmf">fmf</a></code></li>
 <li><code><a title="huracan.components.combustion.combustion_chamber.mf_qr" href="#huracan.components.combustion.combustion_chamber.mf_qr">mf_qr</a></code></li>
 </ul>
 </li>

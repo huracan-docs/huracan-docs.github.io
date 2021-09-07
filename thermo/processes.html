@@ -72,7 +72,9 @@ def absolute(k,
 
 
 def diffusion(mf, cp, k, m, t_0, p_0,
-              eta, PI=None, TAU=None):
+              eta,
+              t0=None, p0=None,
+              PI=None, TAU=None):
     &#34;&#34;&#34;
     Diffusion.
 
@@ -115,8 +117,8 @@ def diffusion(mf, cp, k, m, t_0, p_0,
         pi  = (1+eta*(k-1)/2*m**2)**(k/(k-1))       # Pressure -&gt; Total pressure
         PI  = pi/a.pi
 
-    t00 = a.t0
-    p00 = a.p0
+    t00 = a.t0 if isinstance(t0, type(None)) else t0
+    p00 = a.p0 if isinstance(p0, type(None)) else p0
 
     t01 = t00*TAU
     p01 = p00*PI
@@ -244,9 +246,11 @@ def expansion(mf, cp, k, t00, p00,
 def combustion(mf, cp,
                t00, p00,
                fuel_mf, fuel_LHV,
-               eta):
+               eta,
+               PI=1):
     &#34;&#34;&#34;
     Constant pressure heat addition.
+    - A pressure ratio PI may be specified if required.
 
     :param mf:       [kg/s] Gas mass flow
     :param cp:       [-]    Constant pressure specific heat
@@ -269,7 +273,7 @@ def combustion(mf, cp,
     dt = eta*(fuel_mf*fuel_LHV)/(mf*cp)
 
     t01 = t00 + dt
-    p01 = p00
+    p01 = p00*PI
 
     setattr_namespace(p, locals())
 
@@ -351,10 +355,11 @@ process instance</p></div>
 </details>
 </dd>
 <dt id="huracan.thermo.processes.combustion"><code class="name flex">
-<span>def <span class="ident">combustion</span></span>(<span>mf, cp, t00, p00, fuel_mf, fuel_LHV, eta)</span>
+<span>def <span class="ident">combustion</span></span>(<span>mf, cp, t00, p00, fuel_mf, fuel_LHV, eta, PI=1)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Constant pressure heat addition.</p>
+<div class="desc"><p>Constant pressure heat addition.
+- A pressure ratio PI may be specified if required.</p>
 <p>:param mf:
 [kg/s] Gas mass flow
 :param cp:
@@ -391,9 +396,11 @@ float</p></div>
 <pre><code class="python">def combustion(mf, cp,
                t00, p00,
                fuel_mf, fuel_LHV,
-               eta):
+               eta,
+               PI=1):
     &#34;&#34;&#34;
     Constant pressure heat addition.
+    - A pressure ratio PI may be specified if required.
 
     :param mf:       [kg/s] Gas mass flow
     :param cp:       [-]    Constant pressure specific heat
@@ -416,7 +423,7 @@ float</p></div>
     dt = eta*(fuel_mf*fuel_LHV)/(mf*cp)
 
     t01 = t00 + dt
-    p01 = p00
+    p01 = p00*PI
 
     setattr_namespace(p, locals())
 
@@ -539,7 +546,7 @@ process instance</p></div>
 </details>
 </dd>
 <dt id="huracan.thermo.processes.diffusion"><code class="name flex">
-<span>def <span class="ident">diffusion</span></span>(<span>mf, cp, k, m, t_0, p_0, eta, PI=None, TAU=None)</span>
+<span>def <span class="ident">diffusion</span></span>(<span>mf, cp, k, m, t_0, p_0, eta, t0=None, p0=None, PI=None, TAU=None)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Diffusion.</p>
@@ -603,7 +610,9 @@ process instance</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def diffusion(mf, cp, k, m, t_0, p_0,
-              eta, PI=None, TAU=None):
+              eta,
+              t0=None, p0=None,
+              PI=None, TAU=None):
     &#34;&#34;&#34;
     Diffusion.
 
@@ -646,8 +655,8 @@ process instance</p></div>
         pi  = (1+eta*(k-1)/2*m**2)**(k/(k-1))       # Pressure -&gt; Total pressure
         PI  = pi/a.pi
 
-    t00 = a.t0
-    p00 = a.p0
+    t00 = a.t0 if isinstance(t0, type(None)) else t0
+    p00 = a.p0 if isinstance(p0, type(None)) else p0
 
     t01 = t00*TAU
     p01 = p00*PI

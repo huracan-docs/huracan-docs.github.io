@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.10.0" />
-<title>huracan.components.adiabatic API documentation</title>
+<title>huracan.components.rotary API documentation</title>
 <meta name="description" content="" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
@@ -19,7 +19,7 @@
 <main>
 <article id="content">
 <header>
-<h1 class="title">Module <code>huracan.components.adiabatic</code></h1>
+<h1 class="title">Module <code>huracan.components.rotary</code></h1>
 </header>
 <section id="section-intro">
 <details class="source">
@@ -27,43 +27,6 @@
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">from huracan.engine import component
-
-
-class intake(component):
-    &#34;&#34;&#34;
-    Intake
-    ------
-
-    Airflow fed directly to engine.
-    &#34;&#34;&#34;
-    def tf(self, gas):
-        return gas.absolute()
-
-
-class inlet(component):
-    &#34;&#34;&#34;
-    Inlet
-    -----
-
-    Adiabatic diffusion.
-    &#34;&#34;&#34;
-    def __init__(self,
-                 eta=None,
-                 PI=None,
-                 TAU=None):
-        &#34;&#34;&#34;
-        :type eta: float
-        :type PI:  float
-        :type TAU: float
-        &#34;&#34;&#34;
-        self.eta = eta
-        self.PI  = PI
-        self.TAU = TAU
-
-        assert not isinstance(eta, type(None)) or not isinstance(PI, type(None)) or not isinstance(TAU, type(None))
-
-    def tf(self, gas):
-        return gas.diffusion(eta=self.eta, PI=self.PI, TAU=self.TAU)
 
 
 class compressor(component):
@@ -83,7 +46,6 @@ class compressor(component):
         :type TAU: float
         &#34;&#34;&#34;
         self.eta = eta
-
         self.PI  = PI
         self.TAU = TAU
 
@@ -130,68 +92,96 @@ class turbine(component):
         return self.shaft.w_r()
 
 
-class nozzle(component):
+class screw(component):
     &#34;&#34;&#34;
-    Nozzle
-    ------
+    Screw
+    -----
 
-    Adiabatic expansion.
+    Mechanical device to turn rotational to axial motion.
     &#34;&#34;&#34;
     def __init__(self,
                  eta,
-                 PI=None
-                 ):
+                 PI=None,
+                 TAU=None):
         &#34;&#34;&#34;
         :type eta: float
         :type PI:  float
+        :type TAU: float
         &#34;&#34;&#34;
         self.eta = eta
         self.PI  = PI
+        self.TAU = TAU
 
-        self.choked = False
+
+class fan(screw):
+    &#34;&#34;&#34;
+    Fan
+    ---
+
+    Fundamental differences with a propeller:
+    - Disk loading.
+    - Fan shroud.
+    - Bypass flow.
+    &#34;&#34;&#34;
+
+    def __init__(self,
+                 eta,
+                 PI=None,
+                 TAU=None):
+        &#34;&#34;&#34;
+        :type eta: float
+        :type PI:  float
+        :type TAU: float
+        &#34;&#34;&#34;
+        super().__init__(eta=eta,
+                         PI= PI,
+                         TAU=TAU)
 
     def tf(self, gas):
-        return gas.expansion(eta=self.eta, PI=self.pi(gas), TAU=None)
+        return gas.compression(eta=self.eta, PI=self.PI, TAU=self.TAU)
 
-    def pi(self, gas):
+
+class prop(screw):
+    &#34;&#34;&#34;
+    Propeller
+    ---------
+    &#34;&#34;&#34;
+    def __init__(self,
+                 eta,
+                 w,
+                 PI=None,
+                 TAU=None):
         &#34;&#34;&#34;
-        Nozzle pressure ratio.
+        :param w:  [W] Propeller break power
 
-        If the nozzle pressure ratio is not provided, it is set as
-        the ratio between the gas total pressure before the nozzle
-        and the ambient pressure.
-        If the inverse of the nozzle pressure ratio is larger than
-        the critical inverse pressure ratio, the flow is choked and
-        the nozzle pressure ratio will not exceed the critical pressure
-        ratio.
+        :type eta: float
+        :type w:   float
+        :type PI:  float
+        :type TAU: float
         &#34;&#34;&#34;
-        inv_PI = gas.p0/gas.p_0 if isinstance(self.PI, type(None)) else 1/self.PI
+        super().__init__(eta=1,
+                         PI=PI,
+                         TAU=TAU)
+        self.w        = w
+        self.eta_prop = eta
 
-        if inv_PI &gt; self.inv_pi_crit(gas):
-            PI = 1/self.inv_pi_crit(gas)
-            self.choked = True
-        else:
-            PI = 1/inv_PI
+    def thrust(self, v0):
+        return self.w*self.eta_prop/v0
 
-        return PI
+    def tf(self, gas):
+        p = gas.compression(eta=self.eta, PI=self.PI, TAU=self.TAU)   # Placeholder
+        p.w = self.w
+        return p
 
-    def inv_pi_crit(self, gas):
-        &#34;&#34;&#34;
-        Inverse critical pressure ratio.
 
-        Ratio of the pressure **before** the inlet over that
-        **after** the inlet (inversely to the widely used pressure
-        ratio), starting from which supersonic flow happens in the
-        expansion process, causing the nozzle to become choked.
+class propfan(prop):
+    &#34;&#34;&#34;
+    Propfan
+    -------
 
-        With a choked nozzle the expansion of the gas is incomplete,
-        with a maximum total pressure ratio in the nozzle equal to
-
-            1/PI_crit
-
-        &#34;&#34;&#34;
-        k = gas.k(gas.t0)
-        return 1/(1-1/self.eta*((k-1)/(k+1)))**(k/(k-1))</code></pre>
+    Fundamental difference with a propeller:
+    - Disk loading.
+    &#34;&#34;&#34;</code></pre>
 </details>
 </section>
 <section>
@@ -203,7 +193,7 @@ class nozzle(component):
 <section>
 <h2 class="section-title" id="header-classes">Classes</h2>
 <dl>
-<dt id="huracan.components.adiabatic.compressor"><code class="flex name class">
+<dt id="huracan.components.rotary.compressor"><code class="flex name class">
 <span>class <span class="ident">compressor</span></span>
 <span>(</span><span>eta, PI=None, TAU=None)</span>
 </code></dt>
@@ -235,7 +225,6 @@ float
         :type TAU: float
         &#34;&#34;&#34;
         self.eta = eta
-
         self.PI  = PI
         self.TAU = TAU
 
@@ -248,7 +237,7 @@ float
 </ul>
 <h3>Methods</h3>
 <dl>
-<dt id="huracan.components.adiabatic.compressor.tf"><code class="name flex">
+<dt id="huracan.components.rotary.compressor.tf"><code class="name flex">
 <span>def <span class="ident">tf</span></span>(<span>self, gas)</span>
 </code></dt>
 <dd>
@@ -263,13 +252,16 @@ float
 </dd>
 </dl>
 </dd>
-<dt id="huracan.components.adiabatic.inlet"><code class="flex name class">
-<span>class <span class="ident">inlet</span></span>
-<span>(</span><span>eta=None, PI=None, TAU=None)</span>
+<dt id="huracan.components.rotary.fan"><code class="flex name class">
+<span>class <span class="ident">fan</span></span>
+<span>(</span><span>eta, PI=None, TAU=None)</span>
 </code></dt>
 <dd>
-<div class="desc"><h2 id="inlet">Inlet</h2>
-<p>Adiabatic diffusion.</p>
+<div class="desc"><h2 id="fan">Fan</h2>
+<p>Fundamental differences with a propeller:
+- Disk loading.
+- Fan shroud.
+- Bypass flow.</p>
 <p>:type eta: float
 :type PI:
 float
@@ -278,15 +270,206 @@ float
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">class inlet(component):
+<pre><code class="python">class fan(screw):
     &#34;&#34;&#34;
-    Inlet
-    -----
+    Fan
+    ---
 
-    Adiabatic diffusion.
+    Fundamental differences with a propeller:
+    - Disk loading.
+    - Fan shroud.
+    - Bypass flow.
+    &#34;&#34;&#34;
+
+    def __init__(self,
+                 eta,
+                 PI=None,
+                 TAU=None):
+        &#34;&#34;&#34;
+        :type eta: float
+        :type PI:  float
+        :type TAU: float
+        &#34;&#34;&#34;
+        super().__init__(eta=eta,
+                         PI= PI,
+                         TAU=TAU)
+
+    def tf(self, gas):
+        return gas.compression(eta=self.eta, PI=self.PI, TAU=self.TAU)</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="huracan.components.rotary.screw" href="#huracan.components.rotary.screw">screw</a></li>
+<li><a title="huracan.engine.component" href="../engine.html#huracan.engine.component">component</a></li>
+</ul>
+<h3>Methods</h3>
+<dl>
+<dt id="huracan.components.rotary.fan.tf"><code class="name flex">
+<span>def <span class="ident">tf</span></span>(<span>self, gas)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def tf(self, gas):
+    return gas.compression(eta=self.eta, PI=self.PI, TAU=self.TAU)</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+<dt id="huracan.components.rotary.prop"><code class="flex name class">
+<span>class <span class="ident">prop</span></span>
+<span>(</span><span>eta, w, PI=None, TAU=None)</span>
+</code></dt>
+<dd>
+<div class="desc"><h2 id="propeller">Propeller</h2>
+<p>:param w:
+[W] Propeller break power</p>
+<p>:type eta: float
+:type w:
+float
+:type PI:
+float
+:type TAU: float</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class prop(screw):
+    &#34;&#34;&#34;
+    Propeller
+    ---------
     &#34;&#34;&#34;
     def __init__(self,
-                 eta=None,
+                 eta,
+                 w,
+                 PI=None,
+                 TAU=None):
+        &#34;&#34;&#34;
+        :param w:  [W] Propeller break power
+
+        :type eta: float
+        :type w:   float
+        :type PI:  float
+        :type TAU: float
+        &#34;&#34;&#34;
+        super().__init__(eta=1,
+                         PI=PI,
+                         TAU=TAU)
+        self.w        = w
+        self.eta_prop = eta
+
+    def thrust(self, v0):
+        return self.w*self.eta_prop/v0
+
+    def tf(self, gas):
+        p = gas.compression(eta=self.eta, PI=self.PI, TAU=self.TAU)   # Placeholder
+        p.w = self.w
+        return p</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="huracan.components.rotary.screw" href="#huracan.components.rotary.screw">screw</a></li>
+<li><a title="huracan.engine.component" href="../engine.html#huracan.engine.component">component</a></li>
+</ul>
+<h3>Subclasses</h3>
+<ul class="hlist">
+<li><a title="huracan.components.rotary.propfan" href="#huracan.components.rotary.propfan">propfan</a></li>
+</ul>
+<h3>Methods</h3>
+<dl>
+<dt id="huracan.components.rotary.prop.tf"><code class="name flex">
+<span>def <span class="ident">tf</span></span>(<span>self, gas)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def tf(self, gas):
+    p = gas.compression(eta=self.eta, PI=self.PI, TAU=self.TAU)   # Placeholder
+    p.w = self.w
+    return p</code></pre>
+</details>
+</dd>
+<dt id="huracan.components.rotary.prop.thrust"><code class="name flex">
+<span>def <span class="ident">thrust</span></span>(<span>self, v0)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def thrust(self, v0):
+    return self.w*self.eta_prop/v0</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+<dt id="huracan.components.rotary.propfan"><code class="flex name class">
+<span>class <span class="ident">propfan</span></span>
+<span>(</span><span>eta, w, PI=None, TAU=None)</span>
+</code></dt>
+<dd>
+<div class="desc"><h2 id="propfan">Propfan</h2>
+<p>Fundamental difference with a propeller:
+- Disk loading.</p>
+<p>:param w:
+[W] Propeller break power</p>
+<p>:type eta: float
+:type w:
+float
+:type PI:
+float
+:type TAU: float</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class propfan(prop):
+    &#34;&#34;&#34;
+    Propfan
+    -------
+
+    Fundamental difference with a propeller:
+    - Disk loading.
+    &#34;&#34;&#34;</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="huracan.components.rotary.prop" href="#huracan.components.rotary.prop">prop</a></li>
+<li><a title="huracan.components.rotary.screw" href="#huracan.components.rotary.screw">screw</a></li>
+<li><a title="huracan.engine.component" href="../engine.html#huracan.engine.component">component</a></li>
+</ul>
+</dd>
+<dt id="huracan.components.rotary.screw"><code class="flex name class">
+<span>class <span class="ident">screw</span></span>
+<span>(</span><span>eta, PI=None, TAU=None)</span>
+</code></dt>
+<dd>
+<div class="desc"><h2 id="screw">Screw</h2>
+<p>Mechanical device to turn rotational to axial motion.</p>
+<p>:type eta: float
+:type PI:
+float
+:type TAU: float</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class screw(component):
+    &#34;&#34;&#34;
+    Screw
+    -----
+
+    Mechanical device to turn rotational to axial motion.
+    &#34;&#34;&#34;
+    def __init__(self,
+                 eta,
                  PI=None,
                  TAU=None):
         &#34;&#34;&#34;
@@ -296,249 +479,19 @@ float
         &#34;&#34;&#34;
         self.eta = eta
         self.PI  = PI
-        self.TAU = TAU
-
-        assert not isinstance(eta, type(None)) or not isinstance(PI, type(None)) or not isinstance(TAU, type(None))
-
-    def tf(self, gas):
-        return gas.diffusion(eta=self.eta, PI=self.PI, TAU=self.TAU)</code></pre>
+        self.TAU = TAU</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
 <li><a title="huracan.engine.component" href="../engine.html#huracan.engine.component">component</a></li>
 </ul>
-<h3>Methods</h3>
-<dl>
-<dt id="huracan.components.adiabatic.inlet.tf"><code class="name flex">
-<span>def <span class="ident">tf</span></span>(<span>self, gas)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def tf(self, gas):
-    return gas.diffusion(eta=self.eta, PI=self.PI, TAU=self.TAU)</code></pre>
-</details>
-</dd>
-</dl>
-</dd>
-<dt id="huracan.components.adiabatic.intake"><code class="flex name class">
-<span>class <span class="ident">intake</span></span>
-</code></dt>
-<dd>
-<div class="desc"><h2 id="intake">Intake</h2>
-<p>Airflow fed directly to engine.</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">class intake(component):
-    &#34;&#34;&#34;
-    Intake
-    ------
-
-    Airflow fed directly to engine.
-    &#34;&#34;&#34;
-    def tf(self, gas):
-        return gas.absolute()</code></pre>
-</details>
-<h3>Ancestors</h3>
+<h3>Subclasses</h3>
 <ul class="hlist">
-<li><a title="huracan.engine.component" href="../engine.html#huracan.engine.component">component</a></li>
+<li><a title="huracan.components.rotary.fan" href="#huracan.components.rotary.fan">fan</a></li>
+<li><a title="huracan.components.rotary.prop" href="#huracan.components.rotary.prop">prop</a></li>
 </ul>
-<h3>Methods</h3>
-<dl>
-<dt id="huracan.components.adiabatic.intake.tf"><code class="name flex">
-<span>def <span class="ident">tf</span></span>(<span>self, gas)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def tf(self, gas):
-    return gas.absolute()</code></pre>
-</details>
 </dd>
-</dl>
-</dd>
-<dt id="huracan.components.adiabatic.nozzle"><code class="flex name class">
-<span>class <span class="ident">nozzle</span></span>
-<span>(</span><span>eta, PI=None)</span>
-</code></dt>
-<dd>
-<div class="desc"><h2 id="nozzle">Nozzle</h2>
-<p>Adiabatic expansion.</p>
-<p>:type eta: float
-:type PI:
-float</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">class nozzle(component):
-    &#34;&#34;&#34;
-    Nozzle
-    ------
-
-    Adiabatic expansion.
-    &#34;&#34;&#34;
-    def __init__(self,
-                 eta,
-                 PI=None
-                 ):
-        &#34;&#34;&#34;
-        :type eta: float
-        :type PI:  float
-        &#34;&#34;&#34;
-        self.eta = eta
-        self.PI  = PI
-
-        self.choked = False
-
-    def tf(self, gas):
-        return gas.expansion(eta=self.eta, PI=self.pi(gas), TAU=None)
-
-    def pi(self, gas):
-        &#34;&#34;&#34;
-        Nozzle pressure ratio.
-
-        If the nozzle pressure ratio is not provided, it is set as
-        the ratio between the gas total pressure before the nozzle
-        and the ambient pressure.
-        If the inverse of the nozzle pressure ratio is larger than
-        the critical inverse pressure ratio, the flow is choked and
-        the nozzle pressure ratio will not exceed the critical pressure
-        ratio.
-        &#34;&#34;&#34;
-        inv_PI = gas.p0/gas.p_0 if isinstance(self.PI, type(None)) else 1/self.PI
-
-        if inv_PI &gt; self.inv_pi_crit(gas):
-            PI = 1/self.inv_pi_crit(gas)
-            self.choked = True
-        else:
-            PI = 1/inv_PI
-
-        return PI
-
-    def inv_pi_crit(self, gas):
-        &#34;&#34;&#34;
-        Inverse critical pressure ratio.
-
-        Ratio of the pressure **before** the inlet over that
-        **after** the inlet (inversely to the widely used pressure
-        ratio), starting from which supersonic flow happens in the
-        expansion process, causing the nozzle to become choked.
-
-        With a choked nozzle the expansion of the gas is incomplete,
-        with a maximum total pressure ratio in the nozzle equal to
-
-            1/PI_crit
-
-        &#34;&#34;&#34;
-        k = gas.k(gas.t0)
-        return 1/(1-1/self.eta*((k-1)/(k+1)))**(k/(k-1))</code></pre>
-</details>
-<h3>Ancestors</h3>
-<ul class="hlist">
-<li><a title="huracan.engine.component" href="../engine.html#huracan.engine.component">component</a></li>
-</ul>
-<h3>Methods</h3>
-<dl>
-<dt id="huracan.components.adiabatic.nozzle.inv_pi_crit"><code class="name flex">
-<span>def <span class="ident">inv_pi_crit</span></span>(<span>self, gas)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Inverse critical pressure ratio.</p>
-<p>Ratio of the pressure <strong>before</strong> the inlet over that
-<strong>after</strong> the inlet (inversely to the widely used pressure
-ratio), starting from which supersonic flow happens in the
-expansion process, causing the nozzle to become choked.</p>
-<p>With a choked nozzle the expansion of the gas is incomplete,
-with a maximum total pressure ratio in the nozzle equal to</p>
-<pre><code>1/PI_crit
-</code></pre></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def inv_pi_crit(self, gas):
-    &#34;&#34;&#34;
-    Inverse critical pressure ratio.
-
-    Ratio of the pressure **before** the inlet over that
-    **after** the inlet (inversely to the widely used pressure
-    ratio), starting from which supersonic flow happens in the
-    expansion process, causing the nozzle to become choked.
-
-    With a choked nozzle the expansion of the gas is incomplete,
-    with a maximum total pressure ratio in the nozzle equal to
-
-        1/PI_crit
-
-    &#34;&#34;&#34;
-    k = gas.k(gas.t0)
-    return 1/(1-1/self.eta*((k-1)/(k+1)))**(k/(k-1))</code></pre>
-</details>
-</dd>
-<dt id="huracan.components.adiabatic.nozzle.pi"><code class="name flex">
-<span>def <span class="ident">pi</span></span>(<span>self, gas)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Nozzle pressure ratio.</p>
-<p>If the nozzle pressure ratio is not provided, it is set as
-the ratio between the gas total pressure before the nozzle
-and the ambient pressure.
-If the inverse of the nozzle pressure ratio is larger than
-the critical inverse pressure ratio, the flow is choked and
-the nozzle pressure ratio will not exceed the critical pressure
-ratio.</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def pi(self, gas):
-    &#34;&#34;&#34;
-    Nozzle pressure ratio.
-
-    If the nozzle pressure ratio is not provided, it is set as
-    the ratio between the gas total pressure before the nozzle
-    and the ambient pressure.
-    If the inverse of the nozzle pressure ratio is larger than
-    the critical inverse pressure ratio, the flow is choked and
-    the nozzle pressure ratio will not exceed the critical pressure
-    ratio.
-    &#34;&#34;&#34;
-    inv_PI = gas.p0/gas.p_0 if isinstance(self.PI, type(None)) else 1/self.PI
-
-    if inv_PI &gt; self.inv_pi_crit(gas):
-        PI = 1/self.inv_pi_crit(gas)
-        self.choked = True
-    else:
-        PI = 1/inv_PI
-
-    return PI</code></pre>
-</details>
-</dd>
-<dt id="huracan.components.adiabatic.nozzle.tf"><code class="name flex">
-<span>def <span class="ident">tf</span></span>(<span>self, gas)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def tf(self, gas):
-    return gas.expansion(eta=self.eta, PI=self.pi(gas), TAU=None)</code></pre>
-</details>
-</dd>
-</dl>
-</dd>
-<dt id="huracan.components.adiabatic.turbine"><code class="flex name class">
+<dt id="huracan.components.rotary.turbine"><code class="flex name class">
 <span>class <span class="ident">turbine</span></span>
 <span>(</span><span>eta, PI=None, TAU=None)</span>
 </code></dt>
@@ -597,7 +550,7 @@ float
 </ul>
 <h3>Methods</h3>
 <dl>
-<dt id="huracan.components.adiabatic.turbine.tf"><code class="name flex">
+<dt id="huracan.components.rotary.turbine.tf"><code class="name flex">
 <span>def <span class="ident">tf</span></span>(<span>self, gas)</span>
 </code></dt>
 <dd>
@@ -626,7 +579,7 @@ work exerting components in the turbine's shaft.</p></div>
     return gas.expansion(eta=self.eta, PI=self.PI, TAU=self.TAU)</code></pre>
 </details>
 </dd>
-<dt id="huracan.components.adiabatic.turbine.w_r"><code class="name flex">
+<dt id="huracan.components.rotary.turbine.w_r"><code class="name flex">
 <span>def <span class="ident">w_r</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -658,36 +611,35 @@ work exerting components in the turbine's shaft.</p></div>
 <li><h3><a href="#header-classes">Classes</a></h3>
 <ul>
 <li>
-<h4><code><a title="huracan.components.adiabatic.compressor" href="#huracan.components.adiabatic.compressor">compressor</a></code></h4>
+<h4><code><a title="huracan.components.rotary.compressor" href="#huracan.components.rotary.compressor">compressor</a></code></h4>
 <ul class="">
-<li><code><a title="huracan.components.adiabatic.compressor.tf" href="#huracan.components.adiabatic.compressor.tf">tf</a></code></li>
+<li><code><a title="huracan.components.rotary.compressor.tf" href="#huracan.components.rotary.compressor.tf">tf</a></code></li>
 </ul>
 </li>
 <li>
-<h4><code><a title="huracan.components.adiabatic.inlet" href="#huracan.components.adiabatic.inlet">inlet</a></code></h4>
+<h4><code><a title="huracan.components.rotary.fan" href="#huracan.components.rotary.fan">fan</a></code></h4>
 <ul class="">
-<li><code><a title="huracan.components.adiabatic.inlet.tf" href="#huracan.components.adiabatic.inlet.tf">tf</a></code></li>
+<li><code><a title="huracan.components.rotary.fan.tf" href="#huracan.components.rotary.fan.tf">tf</a></code></li>
 </ul>
 </li>
 <li>
-<h4><code><a title="huracan.components.adiabatic.intake" href="#huracan.components.adiabatic.intake">intake</a></code></h4>
+<h4><code><a title="huracan.components.rotary.prop" href="#huracan.components.rotary.prop">prop</a></code></h4>
 <ul class="">
-<li><code><a title="huracan.components.adiabatic.intake.tf" href="#huracan.components.adiabatic.intake.tf">tf</a></code></li>
+<li><code><a title="huracan.components.rotary.prop.tf" href="#huracan.components.rotary.prop.tf">tf</a></code></li>
+<li><code><a title="huracan.components.rotary.prop.thrust" href="#huracan.components.rotary.prop.thrust">thrust</a></code></li>
 </ul>
 </li>
 <li>
-<h4><code><a title="huracan.components.adiabatic.nozzle" href="#huracan.components.adiabatic.nozzle">nozzle</a></code></h4>
-<ul class="">
-<li><code><a title="huracan.components.adiabatic.nozzle.inv_pi_crit" href="#huracan.components.adiabatic.nozzle.inv_pi_crit">inv_pi_crit</a></code></li>
-<li><code><a title="huracan.components.adiabatic.nozzle.pi" href="#huracan.components.adiabatic.nozzle.pi">pi</a></code></li>
-<li><code><a title="huracan.components.adiabatic.nozzle.tf" href="#huracan.components.adiabatic.nozzle.tf">tf</a></code></li>
-</ul>
+<h4><code><a title="huracan.components.rotary.propfan" href="#huracan.components.rotary.propfan">propfan</a></code></h4>
 </li>
 <li>
-<h4><code><a title="huracan.components.adiabatic.turbine" href="#huracan.components.adiabatic.turbine">turbine</a></code></h4>
+<h4><code><a title="huracan.components.rotary.screw" href="#huracan.components.rotary.screw">screw</a></code></h4>
+</li>
+<li>
+<h4><code><a title="huracan.components.rotary.turbine" href="#huracan.components.rotary.turbine">turbine</a></code></h4>
 <ul class="">
-<li><code><a title="huracan.components.adiabatic.turbine.tf" href="#huracan.components.adiabatic.turbine.tf">tf</a></code></li>
-<li><code><a title="huracan.components.adiabatic.turbine.w_r" href="#huracan.components.adiabatic.turbine.w_r">w_r</a></code></li>
+<li><code><a title="huracan.components.rotary.turbine.tf" href="#huracan.components.rotary.turbine.tf">tf</a></code></li>
+<li><code><a title="huracan.components.rotary.turbine.w_r" href="#huracan.components.rotary.turbine.w_r">w_r</a></code></li>
 </ul>
 </li>
 </ul>
