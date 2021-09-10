@@ -35,6 +35,8 @@ Huracan engine elements
 -----------------------
 &#34;&#34;&#34;
 
+import re
+import types
 import numpy as np
 from copy import deepcopy
 
@@ -179,9 +181,9 @@ class stream:
             self.parents = parents
 
         # Runtime dictionary
-        self.runtime = {}
+        self.runtime_d = {}
         if not isinstance(fr, type(None)):
-            self.runtime[&#39;fr&#39;] = fr
+            self.runtime_d[&#39;fr&#39;] = fr
 
     &#34;&#34;&#34;
     Operators
@@ -195,12 +197,12 @@ class stream:
         Stream concatenation operator: &lt;stream&gt; - &lt;component/stream&gt;
         &#34;&#34;&#34;
         if isinstance(other, component):
-            self._add_component(other)
+            self.add_component(other)
             return self
         if isinstance(other, stream):               # TODO: stream merge
-            return self._add_stream(other)
+            return self.add_stream(other)
 
-    def _add_component(self, c):
+    def add_component(self, c):
         &#34;&#34;&#34;
         Component addition
         &#34;&#34;&#34;
@@ -208,7 +210,7 @@ class stream:
         c.downstream = self.downstream
         c.stream = self
 
-    def _add_stream(self, s):
+    def add_stream(self, s):
         &#34;&#34;&#34;
         Stream addition
         &#34;&#34;&#34;
@@ -237,9 +239,9 @@ class stream:
         &#34;&#34;&#34;
         Stream diversion operator: &lt;stream&gt; * n     for n: 0 =&lt; float =&lt; 1
         &#34;&#34;&#34;
-        return self._divert(other)
+        return self.divert(other)
 
-    def _divert(self, fr, names=None):
+    def divert(self, fr, names=None):
         &#34;&#34;&#34;
         Stream diversion
         &#34;&#34;&#34;
@@ -277,13 +279,11 @@ class stream:
 
     def __getitem__(self, item):
         &#34;&#34;&#34;
-        Component retrieval operator: &lt;stream&gt;[&lt;component stage&gt;]
-
-        :type item: str
+        Component retrieval operator: &lt;stream&gt;[&lt;component stage name&gt;]
         &#34;&#34;&#34;
-        return self._system_takeover(&#39;__getitem__&#39;, item)
+        return self.retrieve(item)
 
-    def ___getitem__(self, item):
+    def retrieve(self, item):
         &#34;&#34;&#34;
         Retrieve any stream component by its stage name.
 
@@ -305,7 +305,7 @@ class stream:
         &#34;&#34;&#34;
         return [c.stage for c in self.components]
 
-    def _stage_name(self, c):
+    def stage_name(self, c):
         &#34;&#34;&#34;
         Return the stage name of a component in the stream,
         composed of the stream identification number, a code
@@ -328,11 +328,11 @@ class stream:
                  &#39;afterburner&#39;:        &#39;ab&#39;,
                  }
 
-        code = codes[c.__class__.__name__] + self._n_instances(c)
+        code = codes[c.__class__.__name__] + self.n_instances(c)
 
         return f&#39;{&#34;.&#34;.join([str(c) for c in self.stream_id])}.{code}&#39;
 
-    def _n_instances(self, comp):
+    def n_instances(self, comp):
         &#34;&#34;&#34;
         Calculate the number of instances of a given component&#39;s
         parent class in the stream (n), and its index in the
@@ -359,7 +359,7 @@ class stream:
 
         return &#39;&#39; if n == 1 else str(i + 1)
 
-    def _log(self):
+    def log(self):
 
         d = 9
 
@@ -376,13 +376,13 @@ class stream:
     &#34;&#34;&#34;
     Stream runtime functions
     &#34;&#34;&#34;
-    def _run(self, log=True):
+    def run(self, log=True):
         &#34;&#34;&#34;
         Execute the transfer functions of all components in the stream
         on the instance&#39;s gas class instance.
         &#34;&#34;&#34;
 
-        self._runtime()
+        self.runtime()
 
         assert hasattr(self, &#39;gas&#39;), &#39;stream does not have a gas attribute.&#39;
 
@@ -390,7 +390,7 @@ class stream:
 
         for c in self.components:
             c(self.gas)                     # Run thermodynamic process on stream gas
-            c.stage = self._stage_name(c)   # Set component stage name
+            c.stage = self.stage_name(c)   # Set component stage name
 
             if hasattr(c, &#39;choked&#39;) and c.choked:           # FIXME: ugly
                 self.choked = c.choked
@@ -399,17 +399,17 @@ class stream:
         self.ran = True
 
         if log:
-            self._log()
+            self.log()
 
-    def _runtime(self):
+    def runtime(self):
         if hasattr(self, &#39;parents&#39;) and len(self.parents) &gt; 1:
-            self._merge()
+            self.merge()
 
-        for k, v in self.runtime.items():
-            f = getattr(self, &#39;_&#39;+k)
+        for k, v in self.runtime_d.items():
+            f = getattr(self, k)
             f(v)
 
-    def _merge(self):
+    def merge(self):
         if hasattr(self, &#39;gas&#39;):
             for s in self.parents:
                 self.gas += s.gas
@@ -418,7 +418,7 @@ class stream:
             for s in self.parents[1:]:
                 self.gas += s.gas
 
-    def _fr(self, fr):
+    def fr(self, fr):
         self.gas, _ = fr * deepcopy(self.gas)
 
     &#34;&#34;&#34;
@@ -456,10 +456,55 @@ class stream:
 
         return np.array([c.S for c in self.components])
 
+    def H(self):
+        &#34;&#34;&#34;
+        Specific enthalpy vector.
+        &#34;&#34;&#34;
+        assert self.ran, &#39;The stream must be run to obtain the specific entropy at each stage&#39;
+
+        return np.array([c.H for c in self.components])
+
+    &#34;&#34;&#34;
+    System takeover
+    &#34;&#34;&#34;
+    def system_takeover(self):
+        &#34;&#34;&#34;
+        System takeover
+        ---------------
+
+        When a stream is integrated in a system, all
+        stream methods with a homonimous system method
+        are renamed as protected stream instance attributes,
+        and new &#34;takeover&#34; methods take their name.
+        &#34;&#34;&#34;
+
+        special = r&#39;^__(.*?)\__$&#39;
+
+        def takeover(obj, method):
+            if hasattr(obj.system, method):
+                return getattr(obj.system, method)
+            else:
+                return getattr(obj, &#39;_&#39; + method)
+
+        for k in dir(self):
+            v = getattr(self, k)
+            print(&#39;A&#39;)
+            print(k, type(v), isinstance(v, types.MethodType))
+            # If the attribute k is:
+            #    - a method
+            #    - which is not special
+            #    - whose name is the name of another method in the stream&#39;s sytem
+            if isinstance(v, types.MethodType) and not re.match(special, k) and k in dir(self.system):
+                setattr(self, &#39;_&#39; + k, v)
+
+                print(getattr(self, &#39;_&#39; + k))
+
+                setattr(self, k, takeover(self, k))
+
     &#34;&#34;&#34;
     Stream outlet flow characteristics
     &#34;&#34;&#34;
-    def _v_exit(self):
+    def v_exit(self):
         &#34;&#34;&#34;
         Flow exit velocity
 
@@ -514,7 +559,7 @@ class stream:
                                                     &#39;inconsistency.&#39;
             return (2*self.gas.cp(t_before_exit)*(t_before_exit - self.gas.t0))**0.5    # Heat -&gt; Kinetic energy
 
-    def _A_exit(self):
+    def A_exit(self):
         &#34;&#34;&#34;
         Nozzle exit area
         &#34;&#34;&#34;
@@ -523,7 +568,7 @@ class stream:
     &#34;&#34;&#34;
     Stream performance analysis
     &#34;&#34;&#34;
-    def _fmf(self):
+    def fmf(self):
         &#34;&#34;&#34;
         Stream fuel mass flow
         &#34;&#34;&#34;
@@ -533,7 +578,7 @@ class stream:
                 fmf += c.fuel.mf
         return fmf
 
-    def _flow_thrust(self):
+    def flow_thrust(self):
         &#34;&#34;&#34;
         Flow thrust
 
@@ -545,7 +590,7 @@ class stream:
         else:
             return self.gas.mf * (self._v_exit() - self.gas.v_0)
 
-    def _prop_thrust(self):
+    def prop_thrust(self):
         &#34;&#34;&#34;
         Propeller/propfan thrust
         &#34;&#34;&#34;
@@ -556,19 +601,19 @@ class stream:
             prop_thrust = 0
         return prop_thrust
 
-    def _total_thrust(self):
+    def total_thrust(self):
         &#34;&#34;&#34;
         Flow thrust plus propeller/propfan thrust
         &#34;&#34;&#34;
         return self._flow_thrust() + self._prop_thrust()
 
-    def _sfc(self):
+    def sfc(self):
         &#34;&#34;&#34;
         Specific fuel consumption
         &#34;&#34;&#34;
         return self.fmf()/self.flow_thrust()
 
-    def _Q_in(self):                #TODO: verify efficiency calculations
+    def Q_in(self):                #TODO: verify efficiency calculations
         &#34;&#34;&#34;
         Heat provided to the flow.
         &#34;&#34;&#34;
@@ -578,7 +623,7 @@ class stream:
                 q_provided += c.Q
         return q_provided
 
-    def _W_req(self):
+    def W_req(self):
         &#34;&#34;&#34;
         Work required from the flow.
         &#34;&#34;&#34;
@@ -591,25 +636,25 @@ class stream:
                 w_required += c.w
         return w_required
 
-    def _E_balance(self):
+    def E_balance(self):
         &#34;&#34;&#34;
         Flow energy balance.
         &#34;&#34;&#34;
         return self._Q_in() - self._W_req()
 
-    def _E_prop(self):
+    def E_prop(self):
         &#34;&#34;&#34;
         Energy added to the flow for propulsion.
         &#34;&#34;&#34;
         return self._v_exit()**2/2
 
-    def _efficiency(self):
+    def efficiency(self):
         &#34;&#34;&#34;
         Engine efficiency
         &#34;&#34;&#34;
         return self._E_balance()/self._Q_in()
 
-    def _prop_efficiency(self):
+    def prop_efficiency(self):
         &#34;&#34;&#34;
         Stream propulsive efficiency.
         &#34;&#34;&#34;
@@ -618,11 +663,11 @@ class stream:
     &#34;&#34;&#34;
     Plots
     &#34;&#34;&#34;
-    def _plot_T_p(self,
-                  show=False,
-                  plot_label=None,
-                  color=colorscheme_one()[0],
-                  **kwargs):
+    def plot_T_p(self,
+                 show=False,
+                 plot_label=None,
+                 color=colorscheme_one()[0],
+                 **kwargs):
         &#34;&#34;&#34;
         Plot
         - Total pressure
@@ -644,11 +689,11 @@ class stream:
                               x_tick_ndecimals=2,
                               **further_custom)
 
-    def _plot_p_V(self,
-                  show=False,
-                  plot_label=None,
-                  color=colorscheme_one()[0],
-                  **kwargs):
+    def plot_p_V(self,
+                 show=False,
+                 plot_label=None,
+                 color=colorscheme_one()[0],
+                 **kwargs):
         &#34;&#34;&#34;
         Plot
         - Total specific volume
@@ -670,11 +715,11 @@ class stream:
                               y_tick_ndecimals=2,
                               **further_custom)
 
-    def _plot_T_S(self,
-                  show=False,
-                  plot_label=None,
-                  color=colorscheme_one()[0],
-                  **kwargs):
+    def plot_T_S(self,
+                 show=False,
+                 plot_label=None,
+                 color=colorscheme_one()[0],
+                 **kwargs):
         &#34;&#34;&#34;
         Plot
         - Specific entropy
@@ -689,6 +734,32 @@ class stream:
         further_custom = {**defaults, **kwargs}
 
         self.plot_cycle_graph(self.S(), self.t0() / 1000,
+                              color=color,
+                              plot_label=plot_label,
+                              show=show,
+                              # Further customization
+                              y_tick_ndecimals=2,
+                              **further_custom)
+
+    def plot_p_H(self,
+                 show=False,
+                 plot_label=None,
+                 color=colorscheme_one()[0],
+                 **kwargs):
+        &#34;&#34;&#34;
+        Plot
+        - Specific entropy
+        - Total temperature
+        &#34;&#34;&#34;
+
+        figure((9, 5))
+
+        defaults = {&#39;x_label&#39;: &#39;p$_0$ [kPa]&#39;,
+                    &#39;y_label&#39;: &#39;H$_0$ [J]&#39;,}
+
+        further_custom = {**defaults, **kwargs}
+
+        self.plot_cycle_graph(self.p0(), self.H() / 1000,
                               color=color,
                               plot_label=plot_label,
                               show=show,
@@ -752,144 +823,6 @@ class stream:
                 show=show,
                 **further_custom)
 
-    &#34;&#34;&#34;
-    System takeover and API functions
-    ---------------------------------
-    &#34;&#34;&#34;
-    def _system_takeover(self, method, *args, **kwargs):
-        if hasattr(self, &#39;system&#39;):
-            return getattr(self.system, method)(*args, **kwargs)
-        else:
-            return getattr(self, &#39;_&#39; + method)(*args, **kwargs)
-
-    def run(self, log=True):
-        args = locals()
-        del args[&#39;self&#39;]
-
-        self._system_takeover(&#39;run&#39;, **args)
-
-    &#34;&#34;&#34;
-    Stream outlet flow characteristics
-    &#34;&#34;&#34;
-    def v_exit(self):
-        &#34;&#34;&#34;
-        Flow exit velocity
-
-        Assumptions:
-        - If the flow is not choked:
-             The thermal energy lost by the gas as it leaves the nozzle
-             is transformed into kinetic energy without losses.
-        - If the flow is choked:
-             The exit velocity is the velocity of sound before the nozzle
-             exit.
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;v_exit&#39;)
-
-    def A_exit(self):
-        &#34;&#34;&#34;
-        Nozzle exit area
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;A_exit&#39;)
-
-    &#34;&#34;&#34;
-    Stream performance analysis
-    &#34;&#34;&#34;
-    def fmf(self):
-        &#34;&#34;&#34;
-        Stream fuel mass flow
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;fmf&#39;)
-
-    def flow_thrust(self):
-        &#34;&#34;&#34;
-        Flow thrust
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;flow_thrust&#39;)
-
-    def prop_thrust(self):
-        return self._system_takeover(&#39;prop_thrust&#39;)
-
-    def total_thrust(self):
-        return self._system_takeover(&#39;total_thrust&#39;)
-
-    def sfc(self):
-        &#34;&#34;&#34;
-        Specific fuel consumption
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;sfc&#39;)
-
-    def Q_in(self):                 # TODO: verify efficiency calculations
-        &#34;&#34;&#34;
-        Heat provided to the flow.
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;Q_in&#39;)
-
-    def W_req(self):
-        &#34;&#34;&#34;
-        Work required from the flow.
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;W_req&#39;)
-
-    def E_balance(self):
-        &#34;&#34;&#34;
-        Flow energy balance.
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;E_balance&#39;)
-
-    def E_prop(self):
-        &#34;&#34;&#34;
-        Energy added to the flow for propulsion.
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;E_prop&#39;)
-
-    def efficiency(self):
-        &#34;&#34;&#34;
-        Engine efficiency
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;efficiency&#39;)
-
-    def prop_efficiency(self):
-        &#34;&#34;&#34;
-        Stream propulsive efficiency.
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;prop_efficiency&#39;)
-
-    &#34;&#34;&#34;
-    Plots
-    &#34;&#34;&#34;
-    def plot_T_p(self,
-                 show=False,
-                 plot_label=None,
-                 color=colorscheme_one()[0],
-                 **kwargs):
-        args = locals()
-        args.pop(&#39;self&#39;, None)
-        args.pop(&#39;kwargs&#39;, None)
-
-        self._system_takeover(&#39;plot_T_p&#39;, **{**args, **kwargs})
-
-    def plot_p_V(self,
-                 show=False,
-                 plot_label=None,
-                 color=colorscheme_one()[0],
-                 **kwargs):
-        args = locals()
-        args.pop(&#39;self&#39;, None)
-        args.pop(&#39;kwargs&#39;, None)
-
-        self._system_takeover(&#39;plot_p_V&#39;, **{**args, **kwargs})
-
-    def plot_T_S(self,
-                 show=False,
-                 plot_label=None,
-                 color=colorscheme_one()[0],
-                 **kwargs):
-        args = locals()
-        args.pop(&#39;self&#39;, None)
-        args.pop(&#39;kwargs&#39;, None)
-
-        self._system_takeover(&#39;plot_T_S&#39;, **{**args, **kwargs})
-
 
 class system:
     &#34;&#34;&#34;
@@ -903,7 +836,7 @@ class system:
         :type args: stream
         &#34;&#34;&#34;
         self.streams = []
-        self._gobble(list(args))
+        self.gobble(list(args))
 
     &#34;&#34;&#34;
     Operators
@@ -914,15 +847,16 @@ class system:
 
         :type args: stream
         &#34;&#34;&#34;
-        self._gobble(list(args))
+        self.gobble(list(args))
 
-    def _gobble(self, streams):
+    def gobble(self, streams):
         &#34;&#34;&#34;
         :type streams: list of stream
         &#34;&#34;&#34;
         for s in streams:
             self.streams.append(s)
             s.system = self
+            s.system_takeover()
 
     def __add__(self, other):
         &#34;&#34;&#34;
@@ -934,6 +868,12 @@ class system:
         return system(*streams)
 
     def __getitem__(self, item):
+        &#34;&#34;&#34;
+        Component retrieval operator: &lt;system&gt;[&lt;component stage name&gt;]
+        &#34;&#34;&#34;
+        return self.retrieve(item)
+
+    def retrieve(self, item):
         &#34;&#34;&#34;
         Retrieve any stream component by its stage name.
 
@@ -957,7 +897,7 @@ class system:
         Run stream system.
         &#34;&#34;&#34;
 
-        self._sort_streams()
+        self.sort_streams()
 
         n = 0
         while not all([s.ran for s in self.streams]):
@@ -966,7 +906,7 @@ class system:
                     s._run(log)
             n += 1
 
-    def _sort_streams(self):
+    def sort_streams(self):
         &#34;&#34;&#34;
         Sort system streams based on their stream ID
         &#34;&#34;&#34;
@@ -1033,13 +973,13 @@ class system:
         &#34;&#34;&#34;
         Heat provided to the flow.
         &#34;&#34;&#34;
-        return sum([s._Q_in() for s in self.streams])
+        return sum([s.Q_in() for s in self.streams])
 
     def W_req(self):
         &#34;&#34;&#34;
         Work required from the flow.
         &#34;&#34;&#34;
-        return sum([s._W_req() for s in self.streams])
+        return sum([s.W_req() for s in self.streams])
 
     def E_balance(self):
         &#34;&#34;&#34;
@@ -1051,7 +991,7 @@ class system:
         &#34;&#34;&#34;
         Energy added to the flow for propulsion.
         &#34;&#34;&#34;
-        return sum([s._E_prop() for s in self.streams])
+        return sum([s.E_prop() for s in self.streams])
 
     def efficiency(self):
         &#34;&#34;&#34;
@@ -1068,14 +1008,14 @@ class system:
     &#34;&#34;&#34;
     Plots
     &#34;&#34;&#34;
-    def _plot(self,
-              x, y,
-              x_scale=None, y_scale=None,
-              x_label=None, y_label=None,
-              show=False,
-              plot_label=None,                  # When called from a _system_takeover the plot_label and color
-              color=colorscheme_one()[0],       # arguments are passed to the function, but disregarded.
-              **kwargs):
+    def plot(self,
+             x, y,
+             x_scale=None, y_scale=None,
+             x_label=None, y_label=None,
+             show=False,
+             plot_label=None,                  # When called from a _system_takeover the plot_label and color
+             color=colorscheme_one()[0],       # arguments are passed to the function, but disregarded.
+             **kwargs):
         &#34;&#34;&#34;
         System plot
         -----------
@@ -1184,10 +1124,9 @@ class system:
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
 
-        self._plot(x=&#39;p0&#39;, x_label=&#39;p$_0$ [kPa]&#39;,
-                   y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
-                   **{**args, **kwargs}
-                   )
+        self.plot(x=&#39;p0&#39;, x_label=&#39;p$_0$ [kPa]&#39;,
+                  y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
+                  **{**args, **kwargs})
 
     def plot_p_V(self,
                  show=False,
@@ -1198,9 +1137,9 @@ class system:
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
 
-        self._plot(x=&#39;V&#39;,  x_label=&#39;v$_0$ [m$^3$/n]&#39;,
-                   y=&#39;p0&#39;, y_label=&#39;p$_0$ [kPa]&#39;,
-                   **{**args, **kwargs})
+        self.plot(x=&#39;V&#39;,  x_label=&#39;v$_0$ [m$^3$/n]&#39;,
+                  y=&#39;p0&#39;, y_label=&#39;p$_0$ [kPa]&#39;,
+                  **{**args, **kwargs})
 
     def plot_T_S(self,
                  show=False,
@@ -1211,9 +1150,22 @@ class system:
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
 
-        self._plot(x=&#39;S&#39;,  x_label=&#39;S [J/K]&#39;,
-                   y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
-                   **{**args, **kwargs})</code></pre>
+        self.plot(x=&#39;S&#39;,  x_label=&#39;S [J/K]&#39;,
+                  y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
+                  **{**args, **kwargs})
+
+    def plot_p_H(self,
+                 show=False,
+                 plot_label=None,
+                 color=colorscheme_one()[0],
+                 **kwargs):
+        args = locals()
+        args.pop(&#39;self&#39;, None)
+        args.pop(&#39;kwargs&#39;, None)
+
+        self.plot(x=&#39;p0&#39;,  x_label=&#39;p$_0$ [kPa]&#39;,
+                  y=&#39;H&#39;, y_label=&#39;H$_0$ [J]&#39;,
+                  **{**args, **kwargs})</code></pre>
 </details>
 </section>
 <section>
@@ -1499,9 +1451,9 @@ float
             self.parents = parents
 
         # Runtime dictionary
-        self.runtime = {}
+        self.runtime_d = {}
         if not isinstance(fr, type(None)):
-            self.runtime[&#39;fr&#39;] = fr
+            self.runtime_d[&#39;fr&#39;] = fr
 
     &#34;&#34;&#34;
     Operators
@@ -1515,12 +1467,12 @@ float
         Stream concatenation operator: &lt;stream&gt; - &lt;component/stream&gt;
         &#34;&#34;&#34;
         if isinstance(other, component):
-            self._add_component(other)
+            self.add_component(other)
             return self
         if isinstance(other, stream):               # TODO: stream merge
-            return self._add_stream(other)
+            return self.add_stream(other)
 
-    def _add_component(self, c):
+    def add_component(self, c):
         &#34;&#34;&#34;
         Component addition
         &#34;&#34;&#34;
@@ -1528,7 +1480,7 @@ float
         c.downstream = self.downstream
         c.stream = self
 
-    def _add_stream(self, s):
+    def add_stream(self, s):
         &#34;&#34;&#34;
         Stream addition
         &#34;&#34;&#34;
@@ -1557,9 +1509,9 @@ float
         &#34;&#34;&#34;
         Stream diversion operator: &lt;stream&gt; * n     for n: 0 =&lt; float =&lt; 1
         &#34;&#34;&#34;
-        return self._divert(other)
+        return self.divert(other)
 
-    def _divert(self, fr, names=None):
+    def divert(self, fr, names=None):
         &#34;&#34;&#34;
         Stream diversion
         &#34;&#34;&#34;
@@ -1597,13 +1549,11 @@ float
 
     def __getitem__(self, item):
         &#34;&#34;&#34;
-        Component retrieval operator: &lt;stream&gt;[&lt;component stage&gt;]
-
-        :type item: str
+        Component retrieval operator: &lt;stream&gt;[&lt;component stage name&gt;]
         &#34;&#34;&#34;
-        return self._system_takeover(&#39;__getitem__&#39;, item)
+        return self.retrieve(item)
 
-    def ___getitem__(self, item):
+    def retrieve(self, item):
         &#34;&#34;&#34;
         Retrieve any stream component by its stage name.
 
@@ -1625,7 +1575,7 @@ float
         &#34;&#34;&#34;
         return [c.stage for c in self.components]
 
-    def _stage_name(self, c):
+    def stage_name(self, c):
         &#34;&#34;&#34;
         Return the stage name of a component in the stream,
         composed of the stream identification number, a code
@@ -1648,11 +1598,11 @@ float
                  &#39;afterburner&#39;:        &#39;ab&#39;,
                  }
 
-        code = codes[c.__class__.__name__] + self._n_instances(c)
+        code = codes[c.__class__.__name__] + self.n_instances(c)
 
         return f&#39;{&#34;.&#34;.join([str(c) for c in self.stream_id])}.{code}&#39;
 
-    def _n_instances(self, comp):
+    def n_instances(self, comp):
         &#34;&#34;&#34;
         Calculate the number of instances of a given component&#39;s
         parent class in the stream (n), and its index in the
@@ -1679,7 +1629,7 @@ float
 
         return &#39;&#39; if n == 1 else str(i + 1)
 
-    def _log(self):
+    def log(self):
 
         d = 9
 
@@ -1696,13 +1646,13 @@ float
     &#34;&#34;&#34;
     Stream runtime functions
     &#34;&#34;&#34;
-    def _run(self, log=True):
+    def run(self, log=True):
         &#34;&#34;&#34;
         Execute the transfer functions of all components in the stream
         on the instance&#39;s gas class instance.
         &#34;&#34;&#34;
 
-        self._runtime()
+        self.runtime()
 
         assert hasattr(self, &#39;gas&#39;), &#39;stream does not have a gas attribute.&#39;
 
@@ -1710,7 +1660,7 @@ float
 
         for c in self.components:
             c(self.gas)                     # Run thermodynamic process on stream gas
-            c.stage = self._stage_name(c)   # Set component stage name
+            c.stage = self.stage_name(c)   # Set component stage name
 
             if hasattr(c, &#39;choked&#39;) and c.choked:           # FIXME: ugly
                 self.choked = c.choked
@@ -1719,17 +1669,17 @@ float
         self.ran = True
 
         if log:
-            self._log()
+            self.log()
 
-    def _runtime(self):
+    def runtime(self):
         if hasattr(self, &#39;parents&#39;) and len(self.parents) &gt; 1:
-            self._merge()
+            self.merge()
 
-        for k, v in self.runtime.items():
-            f = getattr(self, &#39;_&#39;+k)
+        for k, v in self.runtime_d.items():
+            f = getattr(self, k)
             f(v)
 
-    def _merge(self):
+    def merge(self):
         if hasattr(self, &#39;gas&#39;):
             for s in self.parents:
                 self.gas += s.gas
@@ -1738,7 +1688,7 @@ float
             for s in self.parents[1:]:
                 self.gas += s.gas
 
-    def _fr(self, fr):
+    def fr(self, fr):
         self.gas, _ = fr * deepcopy(self.gas)
 
     &#34;&#34;&#34;
@@ -1776,10 +1726,55 @@ float
 
         return np.array([c.S for c in self.components])
 
+    def H(self):
+        &#34;&#34;&#34;
+        Specific enthalpy vector.
+        &#34;&#34;&#34;
+        assert self.ran, &#39;The stream must be run to obtain the specific entropy at each stage&#39;
+
+        return np.array([c.H for c in self.components])
+
+    &#34;&#34;&#34;
+    System takeover
+    &#34;&#34;&#34;
+    def system_takeover(self):
+        &#34;&#34;&#34;
+        System takeover
+        ---------------
+
+        When a stream is integrated in a system, all
+        stream methods with a homonimous system method
+        are renamed as protected stream instance attributes,
+        and new &#34;takeover&#34; methods take their name.
+        &#34;&#34;&#34;
+
+        special = r&#39;^__(.*?)\__$&#39;
+
+        def takeover(obj, method):
+            if hasattr(obj.system, method):
+                return getattr(obj.system, method)
+            else:
+                return getattr(obj, &#39;_&#39; + method)
+
+        for k in dir(self):
+            v = getattr(self, k)
+            print(&#39;A&#39;)
+            print(k, type(v), isinstance(v, types.MethodType))
+            # If the attribute k is:
+            #    - a method
+            #    - which is not special
+            #    - whose name is the name of another method in the stream&#39;s sytem
+            if isinstance(v, types.MethodType) and not re.match(special, k) and k in dir(self.system):
+                setattr(self, &#39;_&#39; + k, v)
+
+                print(getattr(self, &#39;_&#39; + k))
+
+                setattr(self, k, takeover(self, k))
+
     &#34;&#34;&#34;
     Stream outlet flow characteristics
     &#34;&#34;&#34;
-    def _v_exit(self):
+    def v_exit(self):
         &#34;&#34;&#34;
         Flow exit velocity
 
@@ -1834,7 +1829,7 @@ float
                                                     &#39;inconsistency.&#39;
             return (2*self.gas.cp(t_before_exit)*(t_before_exit - self.gas.t0))**0.5    # Heat -&gt; Kinetic energy
 
-    def _A_exit(self):
+    def A_exit(self):
         &#34;&#34;&#34;
         Nozzle exit area
         &#34;&#34;&#34;
@@ -1843,7 +1838,7 @@ float
     &#34;&#34;&#34;
     Stream performance analysis
     &#34;&#34;&#34;
-    def _fmf(self):
+    def fmf(self):
         &#34;&#34;&#34;
         Stream fuel mass flow
         &#34;&#34;&#34;
@@ -1853,7 +1848,7 @@ float
                 fmf += c.fuel.mf
         return fmf
 
-    def _flow_thrust(self):
+    def flow_thrust(self):
         &#34;&#34;&#34;
         Flow thrust
 
@@ -1865,7 +1860,7 @@ float
         else:
             return self.gas.mf * (self._v_exit() - self.gas.v_0)
 
-    def _prop_thrust(self):
+    def prop_thrust(self):
         &#34;&#34;&#34;
         Propeller/propfan thrust
         &#34;&#34;&#34;
@@ -1876,19 +1871,19 @@ float
             prop_thrust = 0
         return prop_thrust
 
-    def _total_thrust(self):
+    def total_thrust(self):
         &#34;&#34;&#34;
         Flow thrust plus propeller/propfan thrust
         &#34;&#34;&#34;
         return self._flow_thrust() + self._prop_thrust()
 
-    def _sfc(self):
+    def sfc(self):
         &#34;&#34;&#34;
         Specific fuel consumption
         &#34;&#34;&#34;
         return self.fmf()/self.flow_thrust()
 
-    def _Q_in(self):                #TODO: verify efficiency calculations
+    def Q_in(self):                #TODO: verify efficiency calculations
         &#34;&#34;&#34;
         Heat provided to the flow.
         &#34;&#34;&#34;
@@ -1898,7 +1893,7 @@ float
                 q_provided += c.Q
         return q_provided
 
-    def _W_req(self):
+    def W_req(self):
         &#34;&#34;&#34;
         Work required from the flow.
         &#34;&#34;&#34;
@@ -1911,25 +1906,25 @@ float
                 w_required += c.w
         return w_required
 
-    def _E_balance(self):
+    def E_balance(self):
         &#34;&#34;&#34;
         Flow energy balance.
         &#34;&#34;&#34;
         return self._Q_in() - self._W_req()
 
-    def _E_prop(self):
+    def E_prop(self):
         &#34;&#34;&#34;
         Energy added to the flow for propulsion.
         &#34;&#34;&#34;
         return self._v_exit()**2/2
 
-    def _efficiency(self):
+    def efficiency(self):
         &#34;&#34;&#34;
         Engine efficiency
         &#34;&#34;&#34;
         return self._E_balance()/self._Q_in()
 
-    def _prop_efficiency(self):
+    def prop_efficiency(self):
         &#34;&#34;&#34;
         Stream propulsive efficiency.
         &#34;&#34;&#34;
@@ -1938,11 +1933,11 @@ float
     &#34;&#34;&#34;
     Plots
     &#34;&#34;&#34;
-    def _plot_T_p(self,
-                  show=False,
-                  plot_label=None,
-                  color=colorscheme_one()[0],
-                  **kwargs):
+    def plot_T_p(self,
+                 show=False,
+                 plot_label=None,
+                 color=colorscheme_one()[0],
+                 **kwargs):
         &#34;&#34;&#34;
         Plot
         - Total pressure
@@ -1964,11 +1959,11 @@ float
                               x_tick_ndecimals=2,
                               **further_custom)
 
-    def _plot_p_V(self,
-                  show=False,
-                  plot_label=None,
-                  color=colorscheme_one()[0],
-                  **kwargs):
+    def plot_p_V(self,
+                 show=False,
+                 plot_label=None,
+                 color=colorscheme_one()[0],
+                 **kwargs):
         &#34;&#34;&#34;
         Plot
         - Total specific volume
@@ -1990,11 +1985,11 @@ float
                               y_tick_ndecimals=2,
                               **further_custom)
 
-    def _plot_T_S(self,
-                  show=False,
-                  plot_label=None,
-                  color=colorscheme_one()[0],
-                  **kwargs):
+    def plot_T_S(self,
+                 show=False,
+                 plot_label=None,
+                 color=colorscheme_one()[0],
+                 **kwargs):
         &#34;&#34;&#34;
         Plot
         - Specific entropy
@@ -2009,6 +2004,32 @@ float
         further_custom = {**defaults, **kwargs}
 
         self.plot_cycle_graph(self.S(), self.t0() / 1000,
+                              color=color,
+                              plot_label=plot_label,
+                              show=show,
+                              # Further customization
+                              y_tick_ndecimals=2,
+                              **further_custom)
+
+    def plot_p_H(self,
+                 show=False,
+                 plot_label=None,
+                 color=colorscheme_one()[0],
+                 **kwargs):
+        &#34;&#34;&#34;
+        Plot
+        - Specific entropy
+        - Total temperature
+        &#34;&#34;&#34;
+
+        figure((9, 5))
+
+        defaults = {&#39;x_label&#39;: &#39;p$_0$ [kPa]&#39;,
+                    &#39;y_label&#39;: &#39;H$_0$ [J]&#39;,}
+
+        further_custom = {**defaults, **kwargs}
+
+        self.plot_cycle_graph(self.p0(), self.H() / 1000,
                               color=color,
                               plot_label=plot_label,
                               show=show,
@@ -2070,145 +2091,7 @@ float
                 x_label=x_label,
                 y_label=y_label,
                 show=show,
-                **further_custom)
-
-    &#34;&#34;&#34;
-    System takeover and API functions
-    ---------------------------------
-    &#34;&#34;&#34;
-    def _system_takeover(self, method, *args, **kwargs):
-        if hasattr(self, &#39;system&#39;):
-            return getattr(self.system, method)(*args, **kwargs)
-        else:
-            return getattr(self, &#39;_&#39; + method)(*args, **kwargs)
-
-    def run(self, log=True):
-        args = locals()
-        del args[&#39;self&#39;]
-
-        self._system_takeover(&#39;run&#39;, **args)
-
-    &#34;&#34;&#34;
-    Stream outlet flow characteristics
-    &#34;&#34;&#34;
-    def v_exit(self):
-        &#34;&#34;&#34;
-        Flow exit velocity
-
-        Assumptions:
-        - If the flow is not choked:
-             The thermal energy lost by the gas as it leaves the nozzle
-             is transformed into kinetic energy without losses.
-        - If the flow is choked:
-             The exit velocity is the velocity of sound before the nozzle
-             exit.
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;v_exit&#39;)
-
-    def A_exit(self):
-        &#34;&#34;&#34;
-        Nozzle exit area
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;A_exit&#39;)
-
-    &#34;&#34;&#34;
-    Stream performance analysis
-    &#34;&#34;&#34;
-    def fmf(self):
-        &#34;&#34;&#34;
-        Stream fuel mass flow
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;fmf&#39;)
-
-    def flow_thrust(self):
-        &#34;&#34;&#34;
-        Flow thrust
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;flow_thrust&#39;)
-
-    def prop_thrust(self):
-        return self._system_takeover(&#39;prop_thrust&#39;)
-
-    def total_thrust(self):
-        return self._system_takeover(&#39;total_thrust&#39;)
-
-    def sfc(self):
-        &#34;&#34;&#34;
-        Specific fuel consumption
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;sfc&#39;)
-
-    def Q_in(self):                 # TODO: verify efficiency calculations
-        &#34;&#34;&#34;
-        Heat provided to the flow.
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;Q_in&#39;)
-
-    def W_req(self):
-        &#34;&#34;&#34;
-        Work required from the flow.
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;W_req&#39;)
-
-    def E_balance(self):
-        &#34;&#34;&#34;
-        Flow energy balance.
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;E_balance&#39;)
-
-    def E_prop(self):
-        &#34;&#34;&#34;
-        Energy added to the flow for propulsion.
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;E_prop&#39;)
-
-    def efficiency(self):
-        &#34;&#34;&#34;
-        Engine efficiency
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;efficiency&#39;)
-
-    def prop_efficiency(self):
-        &#34;&#34;&#34;
-        Stream propulsive efficiency.
-        &#34;&#34;&#34;
-        return self._system_takeover(&#39;prop_efficiency&#39;)
-
-    &#34;&#34;&#34;
-    Plots
-    &#34;&#34;&#34;
-    def plot_T_p(self,
-                 show=False,
-                 plot_label=None,
-                 color=colorscheme_one()[0],
-                 **kwargs):
-        args = locals()
-        args.pop(&#39;self&#39;, None)
-        args.pop(&#39;kwargs&#39;, None)
-
-        self._system_takeover(&#39;plot_T_p&#39;, **{**args, **kwargs})
-
-    def plot_p_V(self,
-                 show=False,
-                 plot_label=None,
-                 color=colorscheme_one()[0],
-                 **kwargs):
-        args = locals()
-        args.pop(&#39;self&#39;, None)
-        args.pop(&#39;kwargs&#39;, None)
-
-        self._system_takeover(&#39;plot_p_V&#39;, **{**args, **kwargs})
-
-    def plot_T_S(self,
-                 show=False,
-                 plot_label=None,
-                 color=colorscheme_one()[0],
-                 **kwargs):
-        args = locals()
-        args.pop(&#39;self&#39;, None)
-        args.pop(&#39;kwargs&#39;, None)
-
-        self._system_takeover(&#39;plot_T_S&#39;, **{**args, **kwargs})</code></pre>
+                **further_custom)</code></pre>
 </details>
 <h3>Methods</h3>
 <dl>
@@ -2225,7 +2108,7 @@ float
     &#34;&#34;&#34;
     Nozzle exit area
     &#34;&#34;&#34;
-    return self._system_takeover(&#39;A_exit&#39;)</code></pre>
+    return self.gas.mf*R*self.gas.t0/(self.gas.p0*self._v_exit())</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.E_balance"><code class="name flex">
@@ -2241,7 +2124,7 @@ float
     &#34;&#34;&#34;
     Flow energy balance.
     &#34;&#34;&#34;
-    return self._system_takeover(&#39;E_balance&#39;)</code></pre>
+    return self._Q_in() - self._W_req()</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.E_prop"><code class="name flex">
@@ -2257,7 +2140,25 @@ float
     &#34;&#34;&#34;
     Energy added to the flow for propulsion.
     &#34;&#34;&#34;
-    return self._system_takeover(&#39;E_prop&#39;)</code></pre>
+    return self._v_exit()**2/2</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.stream.H"><code class="name flex">
+<span>def <span class="ident">H</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Specific enthalpy vector.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def H(self):
+    &#34;&#34;&#34;
+    Specific enthalpy vector.
+    &#34;&#34;&#34;
+    assert self.ran, &#39;The stream must be run to obtain the specific entropy at each stage&#39;
+
+    return np.array([c.H for c in self.components])</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.Q_in"><code class="name flex">
@@ -2269,11 +2170,15 @@ float
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def Q_in(self):                 # TODO: verify efficiency calculations
+<pre><code class="python">def Q_in(self):                #TODO: verify efficiency calculations
     &#34;&#34;&#34;
     Heat provided to the flow.
     &#34;&#34;&#34;
-    return self._system_takeover(&#39;Q_in&#39;)</code></pre>
+    q_provided = 0
+    for c in self.components:
+        if c.__class__.__name__ == &#39;combustion_chamber&#39;:
+            q_provided += c.Q
+    return q_provided</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.S"><code class="name flex">
@@ -2325,7 +2230,113 @@ float
     &#34;&#34;&#34;
     Work required from the flow.
     &#34;&#34;&#34;
-    return self._system_takeover(&#39;W_req&#39;)</code></pre>
+    w_required = 0
+    for c in self.components:
+        if c.__class__.__name__ in [&#39;fan&#39;,
+                                    &#39;prop&#39;,
+                                    &#39;propfan&#39;,
+                                    &#39;compressor&#39;]:
+            w_required += c.w
+    return w_required</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.stream.add_component"><code class="name flex">
+<span>def <span class="ident">add_component</span></span>(<span>self, c)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Component addition</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_component(self, c):
+    &#34;&#34;&#34;
+    Component addition
+    &#34;&#34;&#34;
+    self.components.append(c)
+    c.downstream = self.downstream
+    c.stream = self</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.stream.add_stream"><code class="name flex">
+<span>def <span class="ident">add_stream</span></span>(<span>self, s)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Stream addition</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_stream(self, s):
+    &#34;&#34;&#34;
+    Stream addition
+    &#34;&#34;&#34;
+    assert hasattr(self, &#39;gas&#39;) and hasattr(s, &#39;gas&#39;), &#39;Both streams must have a gas attribute for&#39; \
+                                                       &#39;the stream merge operation to be possible.&#39;
+
+    n = max(self.stream_id[0], s.stream_id[0])  # Get largest stream_id
+    self.stream_id[0] = s.stream_id[0] = n      # Set largest stream_id for both merging streams
+
+    merged = stream(parents=[self, s])
+    merged.stream_id[0] = n + 1
+
+    if hasattr(self, &#39;system&#39;) and hasattr(s, &#39;system&#39;):
+        self.system = s.system = merged.system = self.system + s.system
+        self.system(merged)
+    elif hasattr(self, &#39;system&#39;):
+        self.system(s, merged)
+    elif hasattr(s, &#39;system&#39;):
+        s.system(self, merged)
+    else:
+        system(self, s, merged)
+
+    return merged</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.stream.divert"><code class="name flex">
+<span>def <span class="ident">divert</span></span>(<span>self, fr, names=None)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Stream diversion</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def divert(self, fr, names=None):
+    &#34;&#34;&#34;
+    Stream diversion
+    &#34;&#34;&#34;
+
+    assert hasattr(self, &#39;gas&#39;), &#39;The stream must have a gas attribute for&#39; \
+                                 &#39;the stream diversion operation to be possible.&#39;
+
+    main = stream(self.gas, fr=fr, parents=[self])
+    div  = stream(self.gas, fr=1-fr, parents=[self])
+
+    # Stream ID
+    main.stream_id[0] = self.stream_id[0] + 1
+    div.stream_id[0]  = self.stream_id[0] + 1
+
+    # Diverted stream IDs
+    if not isinstance(names, type(None)):
+        main.stream_id.append(names[0])
+        div.stream_id.append(names[1])
+    else:
+        mf_matrix = np.array([[main.gas.mf * fr,     main],
+                              [div.gas.mf  * (1-fr), div]])
+        mf_matrix = mf_matrix[mf_matrix[:, 0].argsort()]
+
+        for i in range(mf_matrix[:, 1].size):
+            sub_id = &#39;m&#39; if i == 0 else f&#39;s{i}&#39; if i &gt; 1 else &#39;s&#39;
+            mf_matrix[i, 1].stream_id.append(sub_id)
+
+    if hasattr(self, &#39;system&#39;):
+        self.system(main, div)
+        main.system = div.system = self.system
+    else:
+        system(self, main, div)
+
+    return main, div</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.efficiency"><code class="name flex">
@@ -2341,14 +2352,15 @@ float
     &#34;&#34;&#34;
     Engine efficiency
     &#34;&#34;&#34;
-    return self._system_takeover(&#39;efficiency&#39;)</code></pre>
+    return self._E_balance()/self._Q_in()</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.flow_thrust"><code class="name flex">
 <span>def <span class="ident">flow_thrust</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Flow thrust</p></div>
+<div class="desc"><p>Flow thrust</p>
+<p>If the flow is choked, the expansion of the gas contributes to the thrust of the flow.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -2356,8 +2368,14 @@ float
 <pre><code class="python">def flow_thrust(self):
     &#34;&#34;&#34;
     Flow thrust
+
+    If the flow is choked, the expansion of the gas contributes to the thrust of the flow.
     &#34;&#34;&#34;
-    return self._system_takeover(&#39;flow_thrust&#39;)</code></pre>
+    if self.choked:
+        return self.gas.mf * (self._v_exit() - self.gas.v_0) + self._A_exit() * (
+                    self.gas.p0 - self.gas.p_0)
+    else:
+        return self.gas.mf * (self._v_exit() - self.gas.v_0)</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.fmf"><code class="name flex">
@@ -2373,7 +2391,116 @@ float
     &#34;&#34;&#34;
     Stream fuel mass flow
     &#34;&#34;&#34;
-    return self._system_takeover(&#39;fmf&#39;)</code></pre>
+    fmf = 0
+    for c in self.components:
+        if hasattr(c, &#39;fuel&#39;) and hasattr(c.fuel, &#39;mf&#39;):
+            fmf += c.fuel.mf
+    return fmf</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.stream.fr"><code class="name flex">
+<span>def <span class="ident">fr</span></span>(<span>self, fr)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def fr(self, fr):
+    self.gas, _ = fr * deepcopy(self.gas)</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.stream.log"><code class="name flex">
+<span>def <span class="ident">log</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def log(self):
+
+    d = 9
+
+    for c in self.components:
+        section_name = join_set_distance(c.stage, c.__class__.__name__.capitalize().replace(&#34;_&#34;, &#34; &#34;), d)
+        print_color(section_name, &#39;green&#39;)
+
+        if c.__class__.__name__ == &#39;nozzle&#39;:
+            if c.choked:
+                print_color(&#39; &#39;*d + &#39;Choked flow&#39;, &#39;red&#39;)
+        print_result(&#39; &#39;*(d+1) + &#39;T0&#39;, c.t0, &#39;[K]&#39;)
+        print_result(&#39; &#39;*(d+1) + &#39;p0&#39;, c.p0, &#39;[Pa]&#39;)</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.stream.merge"><code class="name flex">
+<span>def <span class="ident">merge</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def merge(self):
+    if hasattr(self, &#39;gas&#39;):
+        for s in self.parents:
+            self.gas += s.gas
+    else:
+        self.gas = self.parents[0].gas
+        for s in self.parents[1:]:
+            self.gas += s.gas</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.stream.n_instances"><code class="name flex">
+<span>def <span class="ident">n_instances</span></span>(<span>self, comp)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Calculate the number of instances of a given component's
+parent class in the stream (n), and its index in the
+stream's components list (i).</p>
+<p>The index of the component is returned as follows:
+- If the given component is the only instance of its parent
+class in the stream (n = 1):
+- ''
+(empty string)
+- If the given component is one of more instances of its
+parent class in the stream (n &gt; 1):
+- str(i + 1)
+(numeral starting at 1)</p>
+<p>:type comp: component</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def n_instances(self, comp):
+    &#34;&#34;&#34;
+    Calculate the number of instances of a given component&#39;s
+    parent class in the stream (n), and its index in the
+    stream&#39;s components list (i).
+
+    The index of the component is returned as follows:
+    - If the given component is the only instance of its parent
+      class in the stream (n = 1):
+        - &#39;&#39;                                     (empty string)
+    - If the given component is one of more instances of its
+      parent class in the stream (n &gt; 1):
+        - str(i + 1)                    (numeral starting at 1)
+
+    :type comp: component
+    &#34;&#34;&#34;
+
+    i = 0       # Component index
+    n = 0       # Number of instances of the input component&#39;s class in the stream
+    for c in self.components:
+        if comp is c:
+            i = n
+        if comp.__class__.__name__ == c.__class__.__name__:
+            n += 1
+
+    return &#39;&#39; if n == 1 else str(i + 1)</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.p0"><code class="name flex">
@@ -2398,7 +2525,9 @@ float
 <span>def <span class="ident">plot_T_S</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Plot
+- Specific entropy
+- Total temperature</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -2408,18 +2537,35 @@ float
              plot_label=None,
              color=colorscheme_one()[0],
              **kwargs):
-    args = locals()
-    args.pop(&#39;self&#39;, None)
-    args.pop(&#39;kwargs&#39;, None)
+    &#34;&#34;&#34;
+    Plot
+    - Specific entropy
+    - Total temperature
+    &#34;&#34;&#34;
 
-    self._system_takeover(&#39;plot_T_S&#39;, **{**args, **kwargs})</code></pre>
+    figure((9, 5))
+
+    defaults = {&#39;x_label&#39;: &#39;S [J/K/n]&#39;,
+                &#39;y_label&#39;: &#39;T$_0$ [K]&#39;,}
+
+    further_custom = {**defaults, **kwargs}
+
+    self.plot_cycle_graph(self.S(), self.t0() / 1000,
+                          color=color,
+                          plot_label=plot_label,
+                          show=show,
+                          # Further customization
+                          y_tick_ndecimals=2,
+                          **further_custom)</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.plot_T_p"><code class="name flex">
 <span>def <span class="ident">plot_T_p</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Plot
+- Total pressure
+- Total temperature</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -2429,11 +2575,26 @@ float
              plot_label=None,
              color=colorscheme_one()[0],
              **kwargs):
-    args = locals()
-    args.pop(&#39;self&#39;, None)
-    args.pop(&#39;kwargs&#39;, None)
+    &#34;&#34;&#34;
+    Plot
+    - Total pressure
+    - Total temperature
+    &#34;&#34;&#34;
 
-    self._system_takeover(&#39;plot_T_p&#39;, **{**args, **kwargs})</code></pre>
+    figure((9, 5))
+
+    defaults = {&#39;x_label&#39;: &#39;p$_0$ [kPa]&#39;,
+                &#39;y_label&#39;: &#39;T$_0$ [K]&#39;}
+
+    further_custom = {**defaults, **kwargs}
+
+    self.plot_cycle_graph(self.p0()/1000, self.t0(),
+                          color=color,
+                          plot_label=plot_label,
+                          show=show,
+                          # Further customization
+                          x_tick_ndecimals=2,
+                          **further_custom)</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.plot_cycle_graph"><code class="name flex">
@@ -2504,11 +2665,51 @@ class arguments can be passed to this function.</p></div>
             **further_custom)</code></pre>
 </details>
 </dd>
+<dt id="huracan.engine.stream.plot_p_H"><code class="name flex">
+<span>def <span class="ident">plot_p_H</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Plot
+- Specific entropy
+- Total temperature</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def plot_p_H(self,
+             show=False,
+             plot_label=None,
+             color=colorscheme_one()[0],
+             **kwargs):
+    &#34;&#34;&#34;
+    Plot
+    - Specific entropy
+    - Total temperature
+    &#34;&#34;&#34;
+
+    figure((9, 5))
+
+    defaults = {&#39;x_label&#39;: &#39;p$_0$ [kPa]&#39;,
+                &#39;y_label&#39;: &#39;H$_0$ [J]&#39;,}
+
+    further_custom = {**defaults, **kwargs}
+
+    self.plot_cycle_graph(self.p0(), self.H() / 1000,
+                          color=color,
+                          plot_label=plot_label,
+                          show=show,
+                          # Further customization
+                          y_tick_ndecimals=2,
+                          **further_custom)</code></pre>
+</details>
+</dd>
 <dt id="huracan.engine.stream.plot_p_V"><code class="name flex">
 <span>def <span class="ident">plot_p_V</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Plot
+- Total specific volume
+- Total pressure</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -2518,11 +2719,26 @@ class arguments can be passed to this function.</p></div>
              plot_label=None,
              color=colorscheme_one()[0],
              **kwargs):
-    args = locals()
-    args.pop(&#39;self&#39;, None)
-    args.pop(&#39;kwargs&#39;, None)
+    &#34;&#34;&#34;
+    Plot
+    - Total specific volume
+    - Total pressure
+    &#34;&#34;&#34;
 
-    self._system_takeover(&#39;plot_p_V&#39;, **{**args, **kwargs})</code></pre>
+    figure((9, 5))
+
+    defaults = {&#39;x_label&#39;: &#39;v$_0$ [m$^3$/n]&#39;,
+                &#39;y_label&#39;: &#39;p$_0$ [kPa]&#39;}
+
+    further_custom = {**defaults, **kwargs}
+
+    self.plot_cycle_graph(self.V(), self.p0()/1000,
+                          color=color,
+                          plot_label=plot_label,
+                          show=show,
+                          # Further customization
+                          y_tick_ndecimals=2,
+                          **further_custom)</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.prop_efficiency"><code class="name flex">
@@ -2538,24 +2754,91 @@ class arguments can be passed to this function.</p></div>
     &#34;&#34;&#34;
     Stream propulsive efficiency.
     &#34;&#34;&#34;
-    return self._system_takeover(&#39;prop_efficiency&#39;)</code></pre>
+    return self._E_prop()/self._Q_in()</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.prop_thrust"><code class="name flex">
 <span>def <span class="ident">prop_thrust</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Propeller/propfan thrust</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def prop_thrust(self):
-    return self._system_takeover(&#39;prop_thrust&#39;)</code></pre>
+    &#34;&#34;&#34;
+    Propeller/propfan thrust
+    &#34;&#34;&#34;
+    if any([c.__class__.__name__ in [&#39;prop&#39;, &#39;propfan&#39;] for c in self.components]):
+        propellers = [c for c in self.components if c.__class__.__name__ in [&#39;prop&#39;, &#39;propfan&#39;]]
+        prop_thrust = sum([prop.thrust(self.gas.v_0) for prop in propellers])
+    else:
+        prop_thrust = 0
+    return prop_thrust</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.stream.retrieve"><code class="name flex">
+<span>def <span class="ident">retrieve</span></span>(<span>self, item)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Retrieve any stream component by its stage name.</p>
+<p>:type item: str</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def retrieve(self, item):
+    &#34;&#34;&#34;
+    Retrieve any stream component by its stage name.
+
+    :type item: str
+    &#34;&#34;&#34;
+    assert item in self.stages(), &#39;Specified a non-existent stage.&#39;
+
+    for c in self.components:
+        if c.stage == item:
+            return c</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.run"><code class="name flex">
 <span>def <span class="ident">run</span></span>(<span>self, log=True)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Execute the transfer functions of all components in the stream
+on the instance's gas class instance.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def run(self, log=True):
+    &#34;&#34;&#34;
+    Execute the transfer functions of all components in the stream
+    on the instance&#39;s gas class instance.
+    &#34;&#34;&#34;
+
+    self.runtime()
+
+    assert hasattr(self, &#39;gas&#39;), &#39;stream does not have a gas attribute.&#39;
+
+    self.choked = False                                 # FIXME: choked flow implementation is ugly
+
+    for c in self.components:
+        c(self.gas)                     # Run thermodynamic process on stream gas
+        c.stage = self.stage_name(c)   # Set component stage name
+
+        if hasattr(c, &#39;choked&#39;) and c.choked:           # FIXME: ugly
+            self.choked = c.choked
+
+    # Indicate stream has been run.
+    self.ran = True
+
+    if log:
+        self.log()</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.stream.runtime"><code class="name flex">
+<span>def <span class="ident">runtime</span></span>(<span>self)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -2563,11 +2846,13 @@ class arguments can be passed to this function.</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def run(self, log=True):
-    args = locals()
-    del args[&#39;self&#39;]
+<pre><code class="python">def runtime(self):
+    if hasattr(self, &#39;parents&#39;) and len(self.parents) &gt; 1:
+        self.merge()
 
-    self._system_takeover(&#39;run&#39;, **args)</code></pre>
+    for k, v in self.runtime_d.items():
+        f = getattr(self, k)
+        f(v)</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.sfc"><code class="name flex">
@@ -2583,7 +2868,48 @@ class arguments can be passed to this function.</p></div>
     &#34;&#34;&#34;
     Specific fuel consumption
     &#34;&#34;&#34;
-    return self._system_takeover(&#39;sfc&#39;)</code></pre>
+    return self.fmf()/self.flow_thrust()</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.stream.stage_name"><code class="name flex">
+<span>def <span class="ident">stage_name</span></span>(<span>self, c)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Return the stage name of a component in the stream,
+composed of the stream identification number, a code
+representing its parent class, and a numerical index
+if there are more than 1 components of the same class
+in the stream.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def stage_name(self, c):
+    &#34;&#34;&#34;
+    Return the stage name of a component in the stream,
+    composed of the stream identification number, a code
+    representing its parent class, and a numerical index
+    if there are more than 1 components of the same class
+    in the stream.
+    &#34;&#34;&#34;
+    codes = {&#39;fan&#39;:                &#39;fn&#39;,
+             &#39;prop&#39;:               &#39;pr&#39;,
+             &#39;propfan&#39;:            &#39;pf&#39;,
+             &#39;intake&#39;:             &#39;it&#39;,
+             &#39;inlet&#39;:              &#39;il&#39;,
+             &#39;compressor&#39;:         &#39;cp&#39;,
+             &#39;combustion_chamber&#39;: &#39;cc&#39;,
+             &#39;turbine&#39;:            &#39;tb&#39;,
+             &#39;nozzle&#39;:             &#39;nz&#39;,
+
+             &#39;intercooler&#39;:        &#39;ic&#39;,
+             &#39;recuperator&#39;:        &#39;rc&#39;,
+             &#39;afterburner&#39;:        &#39;ab&#39;,
+             }
+
+    code = codes[c.__class__.__name__] + self.n_instances(c)
+
+    return f&#39;{&#34;.&#34;.join([str(c) for c in self.stream_id])}.{code}&#39;</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.stages"><code class="name flex">
@@ -2602,6 +2928,54 @@ component in the stream.</p></div>
     component in the stream.
     &#34;&#34;&#34;
     return [c.stage for c in self.components]</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.stream.system_takeover"><code class="name flex">
+<span>def <span class="ident">system_takeover</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><h2 id="system-takeover">System Takeover</h2>
+<p>When a stream is integrated in a system, all
+stream methods with a homonimous system method
+are renamed as protected stream instance attributes,
+and new "takeover" methods take their name.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def system_takeover(self):
+    &#34;&#34;&#34;
+    System takeover
+    ---------------
+
+    When a stream is integrated in a system, all
+    stream methods with a homonimous system method
+    are renamed as protected stream instance attributes,
+    and new &#34;takeover&#34; methods take their name.
+    &#34;&#34;&#34;
+
+    special = r&#39;^__(.*?)\__$&#39;
+
+    def takeover(obj, method):
+        if hasattr(obj.system, method):
+            return getattr(obj.system, method)
+        else:
+            return getattr(obj, &#39;_&#39; + method)
+
+    for k in dir(self):
+        v = getattr(self, k)
+        print(&#39;A&#39;)
+        print(k, type(v), isinstance(v, types.MethodType))
+        # If the attribute k is:
+        #    - a method
+        #    - which is not special
+        #    - whose name is the name of another method in the stream&#39;s sytem
+        if isinstance(v, types.MethodType) and not re.match(special, k) and k in dir(self.system):
+            setattr(self, &#39;_&#39; + k, v)
+
+            print(getattr(self, &#39;_&#39; + k))
+
+            setattr(self, k, takeover(self, k))</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.t0"><code class="name flex">
@@ -2626,13 +3000,16 @@ component in the stream.</p></div>
 <span>def <span class="ident">total_thrust</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Flow thrust plus propeller/propfan thrust</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def total_thrust(self):
-    return self._system_takeover(&#39;total_thrust&#39;)</code></pre>
+    &#34;&#34;&#34;
+    Flow thrust plus propeller/propfan thrust
+    &#34;&#34;&#34;
+    return self._flow_thrust() + self._prop_thrust()</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.v_exit"><code class="name flex">
@@ -2663,7 +3040,48 @@ exit.</p></div>
          The exit velocity is the velocity of sound before the nozzle
          exit.
     &#34;&#34;&#34;
-    return self._system_takeover(&#39;v_exit&#39;)</code></pre>
+    # Absolute temperature before the stream exit (likely but not necessarily a nozzle)
+    if len(self.components) &gt; 1:
+        # If the stream has more components than 1, the absolute temperature
+        # after the component previous to the last one is taken.
+        if self.components[-1].__class__.__name__ == &#39;nozzle&#39;:
+            t_before_exit = self.components[-2].t0
+        else:
+            t_before_exit = self.components[-1].t0
+    else:
+        if hasattr(self, &#39;parents&#39;):
+            # If the stream has a single component and a parent stream or streams
+            if len(self.parents) &gt; 1:
+                # If the stream has more than a single parent stream, the gases
+                # of each parent are copied, merged and the absolute temperature
+                # of the resulting gas mixture is taken.
+                for i in range(len(self.parents)):
+                    if i == 0:
+                        g = deepcopy(self.parents[i].gas)
+                    else:
+                        g += deepcopy(self.parents[i].gas)
+                t_before_exit = g.t0
+            else:
+                # If the stream has a single parent, the absolute temperature
+                # of the parent&#39;s gas is taken.
+                t_before_exit = self.parents[0].gas.t0
+        else:
+            # Is the stream has a single component and no parent streams,
+            # it is assumed that the setup consists of a intake-nozzle
+            # setup, and the absolute temperature of the moving gas is
+            # taken.
+            t_before_exit = deepcopy(self.gas).absolute().t01
+
+    if self.choked:
+        return (self.gas.k(t_before_exit)*R*t_before_exit)**0.5         # M=1 immediately before nozzle exit
+    else:
+        assert t_before_exit - self.gas.t0 &gt; 0, &#39;The total temperature of the flow is lower before &#39; \
+                                                &#39;the nozzle tha outside the engine: this happens due to the &#39; \
+                                                &#39;compressors not providing enough energy to the flow. You must &#39; \
+                                                &#39;either increase the pressure ratio of the compressors or &#39; \
+                                                &#39;decrease the power extracted from the flow to solve the &#39; \
+                                                &#39;inconsistency.&#39;
+        return (2*self.gas.cp(t_before_exit)*(t_before_exit - self.gas.t0))**0.5    # Heat -&gt; Kinetic energy</code></pre>
 </details>
 </dd>
 </dl>
@@ -2692,7 +3110,7 @@ exit.</p></div>
         :type args: stream
         &#34;&#34;&#34;
         self.streams = []
-        self._gobble(list(args))
+        self.gobble(list(args))
 
     &#34;&#34;&#34;
     Operators
@@ -2703,15 +3121,16 @@ exit.</p></div>
 
         :type args: stream
         &#34;&#34;&#34;
-        self._gobble(list(args))
+        self.gobble(list(args))
 
-    def _gobble(self, streams):
+    def gobble(self, streams):
         &#34;&#34;&#34;
         :type streams: list of stream
         &#34;&#34;&#34;
         for s in streams:
             self.streams.append(s)
             s.system = self
+            s.system_takeover()
 
     def __add__(self, other):
         &#34;&#34;&#34;
@@ -2723,6 +3142,12 @@ exit.</p></div>
         return system(*streams)
 
     def __getitem__(self, item):
+        &#34;&#34;&#34;
+        Component retrieval operator: &lt;system&gt;[&lt;component stage name&gt;]
+        &#34;&#34;&#34;
+        return self.retrieve(item)
+
+    def retrieve(self, item):
         &#34;&#34;&#34;
         Retrieve any stream component by its stage name.
 
@@ -2746,7 +3171,7 @@ exit.</p></div>
         Run stream system.
         &#34;&#34;&#34;
 
-        self._sort_streams()
+        self.sort_streams()
 
         n = 0
         while not all([s.ran for s in self.streams]):
@@ -2755,7 +3180,7 @@ exit.</p></div>
                     s._run(log)
             n += 1
 
-    def _sort_streams(self):
+    def sort_streams(self):
         &#34;&#34;&#34;
         Sort system streams based on their stream ID
         &#34;&#34;&#34;
@@ -2822,13 +3247,13 @@ exit.</p></div>
         &#34;&#34;&#34;
         Heat provided to the flow.
         &#34;&#34;&#34;
-        return sum([s._Q_in() for s in self.streams])
+        return sum([s.Q_in() for s in self.streams])
 
     def W_req(self):
         &#34;&#34;&#34;
         Work required from the flow.
         &#34;&#34;&#34;
-        return sum([s._W_req() for s in self.streams])
+        return sum([s.W_req() for s in self.streams])
 
     def E_balance(self):
         &#34;&#34;&#34;
@@ -2840,7 +3265,7 @@ exit.</p></div>
         &#34;&#34;&#34;
         Energy added to the flow for propulsion.
         &#34;&#34;&#34;
-        return sum([s._E_prop() for s in self.streams])
+        return sum([s.E_prop() for s in self.streams])
 
     def efficiency(self):
         &#34;&#34;&#34;
@@ -2857,14 +3282,14 @@ exit.</p></div>
     &#34;&#34;&#34;
     Plots
     &#34;&#34;&#34;
-    def _plot(self,
-              x, y,
-              x_scale=None, y_scale=None,
-              x_label=None, y_label=None,
-              show=False,
-              plot_label=None,                  # When called from a _system_takeover the plot_label and color
-              color=colorscheme_one()[0],       # arguments are passed to the function, but disregarded.
-              **kwargs):
+    def plot(self,
+             x, y,
+             x_scale=None, y_scale=None,
+             x_label=None, y_label=None,
+             show=False,
+             plot_label=None,                  # When called from a _system_takeover the plot_label and color
+             color=colorscheme_one()[0],       # arguments are passed to the function, but disregarded.
+             **kwargs):
         &#34;&#34;&#34;
         System plot
         -----------
@@ -2973,10 +3398,9 @@ exit.</p></div>
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
 
-        self._plot(x=&#39;p0&#39;, x_label=&#39;p$_0$ [kPa]&#39;,
-                   y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
-                   **{**args, **kwargs}
-                   )
+        self.plot(x=&#39;p0&#39;, x_label=&#39;p$_0$ [kPa]&#39;,
+                  y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
+                  **{**args, **kwargs})
 
     def plot_p_V(self,
                  show=False,
@@ -2987,9 +3411,9 @@ exit.</p></div>
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
 
-        self._plot(x=&#39;V&#39;,  x_label=&#39;v$_0$ [m$^3$/n]&#39;,
-                   y=&#39;p0&#39;, y_label=&#39;p$_0$ [kPa]&#39;,
-                   **{**args, **kwargs})
+        self.plot(x=&#39;V&#39;,  x_label=&#39;v$_0$ [m$^3$/n]&#39;,
+                  y=&#39;p0&#39;, y_label=&#39;p$_0$ [kPa]&#39;,
+                  **{**args, **kwargs})
 
     def plot_T_S(self,
                  show=False,
@@ -3000,9 +3424,22 @@ exit.</p></div>
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
 
-        self._plot(x=&#39;S&#39;,  x_label=&#39;S [J/K]&#39;,
-                   y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
-                   **{**args, **kwargs})</code></pre>
+        self.plot(x=&#39;S&#39;,  x_label=&#39;S [J/K]&#39;,
+                  y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
+                  **{**args, **kwargs})
+
+    def plot_p_H(self,
+                 show=False,
+                 plot_label=None,
+                 color=colorscheme_one()[0],
+                 **kwargs):
+        args = locals()
+        args.pop(&#39;self&#39;, None)
+        args.pop(&#39;kwargs&#39;, None)
+
+        self.plot(x=&#39;p0&#39;,  x_label=&#39;p$_0$ [kPa]&#39;,
+                  y=&#39;H&#39;, y_label=&#39;H$_0$ [J]&#39;,
+                  **{**args, **kwargs})</code></pre>
 </details>
 <h3>Methods</h3>
 <dl>
@@ -3052,7 +3489,7 @@ exit.</p></div>
     &#34;&#34;&#34;
     Energy added to the flow for propulsion.
     &#34;&#34;&#34;
-    return sum([s._E_prop() for s in self.streams])</code></pre>
+    return sum([s.E_prop() for s in self.streams])</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.system.Q_in"><code class="name flex">
@@ -3068,7 +3505,7 @@ exit.</p></div>
     &#34;&#34;&#34;
     Heat provided to the flow.
     &#34;&#34;&#34;
-    return sum([s._Q_in() for s in self.streams])</code></pre>
+    return sum([s.Q_in() for s in self.streams])</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.system.W_req"><code class="name flex">
@@ -3084,7 +3521,7 @@ exit.</p></div>
     &#34;&#34;&#34;
     Work required from the flow.
     &#34;&#34;&#34;
-    return sum([s._W_req() for s in self.streams])</code></pre>
+    return sum([s.W_req() for s in self.streams])</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.system.efficiency"><code class="name flex">
@@ -3129,6 +3566,25 @@ exit.</p></div>
     return sum([s._fmf() for s in self.streams])</code></pre>
 </details>
 </dd>
+<dt id="huracan.engine.system.gobble"><code class="name flex">
+<span>def <span class="ident">gobble</span></span>(<span>self, streams)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>:type streams: list of stream</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def gobble(self, streams):
+    &#34;&#34;&#34;
+    :type streams: list of stream
+    &#34;&#34;&#34;
+    for s in streams:
+        self.streams.append(s)
+        s.system = self
+        s.system_takeover()</code></pre>
+</details>
+</dd>
 <dt id="huracan.engine.system.parents"><code class="name flex">
 <span>def <span class="ident">parents</span></span>(<span>self)</span>
 </code></dt>
@@ -3154,6 +3610,143 @@ flowing to children streams.</p></div>
     return parents</code></pre>
 </details>
 </dd>
+<dt id="huracan.engine.system.plot"><code class="name flex">
+<span>def <span class="ident">plot</span></span>(<span>self, x, y, x_scale=None, y_scale=None, x_label=None, y_label=None, show=False, plot_label=None, color='darkred', **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><h2 id="system-plot">System Plot</h2>
+<p>x and y are the stream parameters to be
+plotted for each stream.</p>
+<p>Process
+1. Create figure
+2. Create state variable and plotters vectors
+2.1 Parent connectors
+3. comparison call</p>
+<p>comparison call
+- fig=None, ax=None -&gt; plot_cycle_graph -&gt; fig in **kwargs keys
+- fig=None, ax=None -&gt; line, scatter
+- line, scatter plot onto active figure, axis</p>
+<p>:param x_scale: Scaling factor.
+:param y_scale: Scaling factor.</p>
+<p>:type x:
+str
+:type y:
+str
+:type x_scale:
+float
+:type y_scale:
+float</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def plot(self,
+         x, y,
+         x_scale=None, y_scale=None,
+         x_label=None, y_label=None,
+         show=False,
+         plot_label=None,                  # When called from a _system_takeover the plot_label and color
+         color=colorscheme_one()[0],       # arguments are passed to the function, but disregarded.
+         **kwargs):
+    &#34;&#34;&#34;
+    System plot
+    -----------
+
+    x and y are the stream parameters to be
+    plotted for each stream.
+
+    Process
+    1. Create figure
+    2. Create state variable and plotters vectors
+        2.1 Parent connectors
+    3. comparison call
+
+    comparison call
+        - fig=None, ax=None -&gt; plot_cycle_graph -&gt; fig in **kwargs keys
+            - fig=None, ax=None -&gt; line, scatter
+                - line, scatter plot onto active figure, axis
+
+    :param x_scale: Scaling factor.
+    :param y_scale: Scaling factor.
+
+    :type x:        str
+    :type y:        str
+    :type x_scale:  float
+    :type y_scale:  float
+    &#34;&#34;&#34;
+    plotters   = []
+    x_system   = []
+    y_system   = []
+
+    scales     = {&#39;t0&#39;: 1,
+                  &#39;p0&#39;: 1/1000,
+                  &#39;V&#39;:  1,
+                  &#39;S&#39;:  1,
+                  &#39;H&#39;:  1}
+    x_scale    = scales[x] if isinstance(x_scale, type(None)) else x_scale
+    y_scale    = scales[y] if isinstance(y_scale, type(None)) else y_scale
+
+    # 1. Create figure
+    figure((9, 5))
+
+    # 2. Create state variable and plotters vectors
+    for stream in self.streams:
+
+        # Plot defaults
+        defaults = {&#39;plot_label&#39;: f&#39;{&#34;.&#34;.join([str(c) for c in stream.stream_id])}&#39;,
+                    &#39;x_label&#39;: x_label,
+                    &#39;y_label&#39;: y_label,
+                    &#39;color&#39;: colorscheme_one()[self.streams.index(stream)],
+                    &#39;zorder&#39;: 10-self.streams.index(stream)
+                    }
+
+        def gen_plotter(**defaults):
+            &#34;&#34;&#34;
+            Returns a plotter using the defaults.
+            Any keyword arguemnts passed to the
+            _plot function overwrite the defaults.
+            &#34;&#34;&#34;
+            return lambda x, y, **kwargs: stream.plot_cycle_graph(x=x, y=y, **{**kwargs, **defaults})
+
+        x_stream = getattr(stream, x)()*x_scale
+        y_stream = getattr(stream, y)()*y_scale
+
+        plotters.append(gen_plotter(**defaults))
+        x_system.append(x_stream)
+        y_system.append(y_stream)
+
+        # 2.1 Parent connectors
+        if hasattr(stream, &#39;parents&#39;):
+            for parent in stream.parents:
+                x_parent = getattr(parent, x)()*x_scale
+                y_parent = getattr(parent, y)()*y_scale
+                # If the parent stream has no stages, get parent stream&#39;s gas state
+                p_x = x_parent[-1] if len(x_parent) != 0 else getattr(parent.gas, x)*x_scale
+                p_y = y_parent[-1] if len(y_parent) != 0 else getattr(parent.gas, y)*y_scale
+                if len(stream.components) &gt; 0:
+                    x_system.append(np.array([p_x, x_stream[0]]))
+                    y_system.append(np.array([p_y, y_stream[0]]))
+                    plotters.append(gen_plotter(color=defaults[&#39;color&#39;], x_label=None, y_label=None))
+
+    # 2.2 Remove streams with no stages
+    mask_x = np.array([a.size != 0 for a in x_system])
+    mask_y = np.array([a.size != 0 for a in y_system])
+    mask = mask_x * mask_y  # Ensure that any x-y array pairs with an empty array are removed
+
+    x_system = np.array(x_system, dtype=&#39;object&#39;)[mask].tolist()
+    y_system = np.array(y_system, dtype=&#39;object&#39;)[mask].tolist()
+    plotters = np.array(plotters, dtype=&#39;object&#39;)[mask].tolist()
+
+    # 4. comparison call
+    #     - fig=None, ax=None -&gt; plot_cycle_graph -&gt; fig in **kwargs keys
+    #         - fig=None, ax=None -&gt; line, scatter
+    #             - line, scatter plot onto active figure, axis
+    comparison(x=x_system, y=y_system, f=plotters,
+               legend_loc=(0.875, 0.425),
+               show=show,
+               **kwargs)</code></pre>
+</details>
+</dd>
 <dt id="huracan.engine.system.plot_T_S"><code class="name flex">
 <span>def <span class="ident">plot_T_S</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
 </code></dt>
@@ -3172,9 +3765,9 @@ flowing to children streams.</p></div>
     args.pop(&#39;self&#39;, None)
     args.pop(&#39;kwargs&#39;, None)
 
-    self._plot(x=&#39;S&#39;,  x_label=&#39;S [J/K]&#39;,
-               y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
-               **{**args, **kwargs})</code></pre>
+    self.plot(x=&#39;S&#39;,  x_label=&#39;S [J/K]&#39;,
+              y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
+              **{**args, **kwargs})</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.system.plot_T_p"><code class="name flex">
@@ -3196,10 +3789,32 @@ flowing to children streams.</p></div>
     args.pop(&#39;self&#39;, None)
     args.pop(&#39;kwargs&#39;, None)
 
-    self._plot(x=&#39;p0&#39;, x_label=&#39;p$_0$ [kPa]&#39;,
-               y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
-               **{**args, **kwargs}
-               )</code></pre>
+    self.plot(x=&#39;p0&#39;, x_label=&#39;p$_0$ [kPa]&#39;,
+              y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
+              **{**args, **kwargs})</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.system.plot_p_H"><code class="name flex">
+<span>def <span class="ident">plot_p_H</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def plot_p_H(self,
+             show=False,
+             plot_label=None,
+             color=colorscheme_one()[0],
+             **kwargs):
+    args = locals()
+    args.pop(&#39;self&#39;, None)
+    args.pop(&#39;kwargs&#39;, None)
+
+    self.plot(x=&#39;p0&#39;,  x_label=&#39;p$_0$ [kPa]&#39;,
+              y=&#39;H&#39;, y_label=&#39;H$_0$ [J]&#39;,
+              **{**args, **kwargs})</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.system.plot_p_V"><code class="name flex">
@@ -3220,9 +3835,9 @@ flowing to children streams.</p></div>
     args.pop(&#39;self&#39;, None)
     args.pop(&#39;kwargs&#39;, None)
 
-    self._plot(x=&#39;V&#39;,  x_label=&#39;v$_0$ [m$^3$/n]&#39;,
-               y=&#39;p0&#39;, y_label=&#39;p$_0$ [kPa]&#39;,
-               **{**args, **kwargs})</code></pre>
+    self.plot(x=&#39;V&#39;,  x_label=&#39;v$_0$ [m$^3$/n]&#39;,
+              y=&#39;p0&#39;, y_label=&#39;p$_0$ [kPa]&#39;,
+              **{**args, **kwargs})</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.system.prop_efficiency"><code class="name flex">
@@ -3254,6 +3869,33 @@ flowing to children streams.</p></div>
     return sum([s._prop_thrust() for s in self.streams])</code></pre>
 </details>
 </dd>
+<dt id="huracan.engine.system.retrieve"><code class="name flex">
+<span>def <span class="ident">retrieve</span></span>(<span>self, item)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Retrieve any stream component by its stage name.</p>
+<p>:type item: str</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def retrieve(self, item):
+    &#34;&#34;&#34;
+    Retrieve any stream component by its stage name.
+
+    :type item: str
+    &#34;&#34;&#34;
+    components = []
+    for s in self.streams:
+        components += s.components
+
+    assert item in [c.stage for c in components], &#39;Specified a non-existent stage.&#39;
+
+    for c in components:
+        if c.stage == item:
+            return c</code></pre>
+</details>
+</dd>
 <dt id="huracan.engine.system.run"><code class="name flex">
 <span>def <span class="ident">run</span></span>(<span>self, log=True)</span>
 </code></dt>
@@ -3268,7 +3910,7 @@ flowing to children streams.</p></div>
     Run stream system.
     &#34;&#34;&#34;
 
-    self._sort_streams()
+    self.sort_streams()
 
     n = 0
     while not all([s.ran for s in self.streams]):
@@ -3289,6 +3931,24 @@ flowing to children streams.</p></div>
 </summary>
 <pre><code class="python">def sfc(self):
     return self.fmf()/self.flow_thrust()</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.system.sort_streams"><code class="name flex">
+<span>def <span class="ident">sort_streams</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Sort system streams based on their stream ID</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def sort_streams(self):
+    &#34;&#34;&#34;
+    Sort system streams based on their stream ID
+    &#34;&#34;&#34;
+    ids     = [&#39;&#39;.join(str(c) for c in stream.stream_id) for stream in self.streams]
+    indexes = [float(id.replace(&#39;m&#39;, &#39;.1&#39;).replace(&#39;s&#39;, &#39;.2&#39;)) for id in ids]
+    self.streams = [s for _, s in sorted(zip(indexes, self.streams))]</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.system.total_thrust"><code class="name flex">
@@ -3373,23 +4033,36 @@ exit.</p></div>
 <li><code><a title="huracan.engine.stream.A_exit" href="#huracan.engine.stream.A_exit">A_exit</a></code></li>
 <li><code><a title="huracan.engine.stream.E_balance" href="#huracan.engine.stream.E_balance">E_balance</a></code></li>
 <li><code><a title="huracan.engine.stream.E_prop" href="#huracan.engine.stream.E_prop">E_prop</a></code></li>
+<li><code><a title="huracan.engine.stream.H" href="#huracan.engine.stream.H">H</a></code></li>
 <li><code><a title="huracan.engine.stream.Q_in" href="#huracan.engine.stream.Q_in">Q_in</a></code></li>
 <li><code><a title="huracan.engine.stream.S" href="#huracan.engine.stream.S">S</a></code></li>
 <li><code><a title="huracan.engine.stream.V" href="#huracan.engine.stream.V">V</a></code></li>
 <li><code><a title="huracan.engine.stream.W_req" href="#huracan.engine.stream.W_req">W_req</a></code></li>
+<li><code><a title="huracan.engine.stream.add_component" href="#huracan.engine.stream.add_component">add_component</a></code></li>
+<li><code><a title="huracan.engine.stream.add_stream" href="#huracan.engine.stream.add_stream">add_stream</a></code></li>
+<li><code><a title="huracan.engine.stream.divert" href="#huracan.engine.stream.divert">divert</a></code></li>
 <li><code><a title="huracan.engine.stream.efficiency" href="#huracan.engine.stream.efficiency">efficiency</a></code></li>
 <li><code><a title="huracan.engine.stream.flow_thrust" href="#huracan.engine.stream.flow_thrust">flow_thrust</a></code></li>
 <li><code><a title="huracan.engine.stream.fmf" href="#huracan.engine.stream.fmf">fmf</a></code></li>
+<li><code><a title="huracan.engine.stream.fr" href="#huracan.engine.stream.fr">fr</a></code></li>
+<li><code><a title="huracan.engine.stream.log" href="#huracan.engine.stream.log">log</a></code></li>
+<li><code><a title="huracan.engine.stream.merge" href="#huracan.engine.stream.merge">merge</a></code></li>
+<li><code><a title="huracan.engine.stream.n_instances" href="#huracan.engine.stream.n_instances">n_instances</a></code></li>
 <li><code><a title="huracan.engine.stream.p0" href="#huracan.engine.stream.p0">p0</a></code></li>
 <li><code><a title="huracan.engine.stream.plot_T_S" href="#huracan.engine.stream.plot_T_S">plot_T_S</a></code></li>
 <li><code><a title="huracan.engine.stream.plot_T_p" href="#huracan.engine.stream.plot_T_p">plot_T_p</a></code></li>
 <li><code><a title="huracan.engine.stream.plot_cycle_graph" href="#huracan.engine.stream.plot_cycle_graph">plot_cycle_graph</a></code></li>
+<li><code><a title="huracan.engine.stream.plot_p_H" href="#huracan.engine.stream.plot_p_H">plot_p_H</a></code></li>
 <li><code><a title="huracan.engine.stream.plot_p_V" href="#huracan.engine.stream.plot_p_V">plot_p_V</a></code></li>
 <li><code><a title="huracan.engine.stream.prop_efficiency" href="#huracan.engine.stream.prop_efficiency">prop_efficiency</a></code></li>
 <li><code><a title="huracan.engine.stream.prop_thrust" href="#huracan.engine.stream.prop_thrust">prop_thrust</a></code></li>
+<li><code><a title="huracan.engine.stream.retrieve" href="#huracan.engine.stream.retrieve">retrieve</a></code></li>
 <li><code><a title="huracan.engine.stream.run" href="#huracan.engine.stream.run">run</a></code></li>
+<li><code><a title="huracan.engine.stream.runtime" href="#huracan.engine.stream.runtime">runtime</a></code></li>
 <li><code><a title="huracan.engine.stream.sfc" href="#huracan.engine.stream.sfc">sfc</a></code></li>
+<li><code><a title="huracan.engine.stream.stage_name" href="#huracan.engine.stream.stage_name">stage_name</a></code></li>
 <li><code><a title="huracan.engine.stream.stages" href="#huracan.engine.stream.stages">stages</a></code></li>
+<li><code><a title="huracan.engine.stream.system_takeover" href="#huracan.engine.stream.system_takeover">system_takeover</a></code></li>
 <li><code><a title="huracan.engine.stream.t0" href="#huracan.engine.stream.t0">t0</a></code></li>
 <li><code><a title="huracan.engine.stream.total_thrust" href="#huracan.engine.stream.total_thrust">total_thrust</a></code></li>
 <li><code><a title="huracan.engine.stream.v_exit" href="#huracan.engine.stream.v_exit">v_exit</a></code></li>
@@ -3406,14 +4079,19 @@ exit.</p></div>
 <li><code><a title="huracan.engine.system.efficiency" href="#huracan.engine.system.efficiency">efficiency</a></code></li>
 <li><code><a title="huracan.engine.system.flow_thrust" href="#huracan.engine.system.flow_thrust">flow_thrust</a></code></li>
 <li><code><a title="huracan.engine.system.fmf" href="#huracan.engine.system.fmf">fmf</a></code></li>
+<li><code><a title="huracan.engine.system.gobble" href="#huracan.engine.system.gobble">gobble</a></code></li>
 <li><code><a title="huracan.engine.system.parents" href="#huracan.engine.system.parents">parents</a></code></li>
+<li><code><a title="huracan.engine.system.plot" href="#huracan.engine.system.plot">plot</a></code></li>
 <li><code><a title="huracan.engine.system.plot_T_S" href="#huracan.engine.system.plot_T_S">plot_T_S</a></code></li>
 <li><code><a title="huracan.engine.system.plot_T_p" href="#huracan.engine.system.plot_T_p">plot_T_p</a></code></li>
+<li><code><a title="huracan.engine.system.plot_p_H" href="#huracan.engine.system.plot_p_H">plot_p_H</a></code></li>
 <li><code><a title="huracan.engine.system.plot_p_V" href="#huracan.engine.system.plot_p_V">plot_p_V</a></code></li>
 <li><code><a title="huracan.engine.system.prop_efficiency" href="#huracan.engine.system.prop_efficiency">prop_efficiency</a></code></li>
 <li><code><a title="huracan.engine.system.prop_thrust" href="#huracan.engine.system.prop_thrust">prop_thrust</a></code></li>
+<li><code><a title="huracan.engine.system.retrieve" href="#huracan.engine.system.retrieve">retrieve</a></code></li>
 <li><code><a title="huracan.engine.system.run" href="#huracan.engine.system.run">run</a></code></li>
 <li><code><a title="huracan.engine.system.sfc" href="#huracan.engine.system.sfc">sfc</a></code></li>
+<li><code><a title="huracan.engine.system.sort_streams" href="#huracan.engine.system.sort_streams">sort_streams</a></code></li>
 <li><code><a title="huracan.engine.system.total_thrust" href="#huracan.engine.system.total_thrust">total_thrust</a></code></li>
 <li><code><a title="huracan.engine.system.v_exit" href="#huracan.engine.system.v_exit">v_exit</a></code></li>
 </ul>
