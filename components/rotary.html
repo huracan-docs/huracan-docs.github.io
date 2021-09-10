@@ -33,69 +33,6 @@
 from huracan.engine import component
 
 
-class compressor(component):
-    &#34;&#34;&#34;
-    Compressor
-    ----------
-
-    Adiabatic compression.
-    &#34;&#34;&#34;
-    def __init__(self,
-                 eta,
-                 PI=None,
-                 TAU=None):
-        &#34;&#34;&#34;
-        :type eta: float
-        :type PI:  float
-        :type TAU: float
-        &#34;&#34;&#34;
-        self.eta = eta
-        self.PI  = PI
-        self.TAU = TAU
-
-    def tf(self, gas):
-        return gas.compression(eta=self.eta, PI=self.PI, TAU=self.TAU)
-
-
-class turbine(component):
-    &#34;&#34;&#34;
-    Turbine
-    -------
-
-    Adiabatic expansion.
-    &#34;&#34;&#34;
-    def __init__(self,
-                 eta,
-                 PI=None,
-                 TAU=None):
-        &#34;&#34;&#34;
-        :type eta: float
-        :type PI:  float
-        :type TAU: float
-        &#34;&#34;&#34;
-        self.eta = eta
-        self.PI  = PI
-        self.TAU = TAU
-
-    def tf(self, gas):
-        &#34;&#34;&#34;
-        Before runtime, if no total pressure or temperature
-        ratio has been provided, a minimum total temperature
-        ratio is calculated.
-        This temperature ratio is that required to power the
-        work exerting components in the turbine&#39;s shaft.
-        &#34;&#34;&#34;
-        if isinstance(self.PI, type(None)) and isinstance(self.TAU, type(None)):
-            t00 = self.stream.gas.t0
-            t01 = self.stream.gas.t0 - self.shaft.w_r()/(self.stream.gas.mf*self.stream.gas.cp(t00))
-            self.TAU = t01/t00
-
-        return gas.expansion(eta=self.eta, PI=self.PI, TAU=self.TAU)
-
-    def w_r(self):
-        return self.shaft.w_r()
-
-
 class screw(component):
     &#34;&#34;&#34;
     Screw
@@ -115,6 +52,69 @@ class screw(component):
         self.eta = eta
         self.PI  = PI
         self.TAU = TAU
+
+
+class compressor(screw):
+    &#34;&#34;&#34;
+    Compressor
+    ----------
+
+    Adiabatic compression.
+    &#34;&#34;&#34;
+    def __init__(self,
+                 eta,
+                 PI=None,
+                 TAU=None):
+        &#34;&#34;&#34;
+        :type eta: float
+        :type PI:  float
+        :type TAU: float
+        &#34;&#34;&#34;
+        super().__init__(eta=eta,
+                         PI=PI,
+                         TAU=TAU)
+
+    def tf(self, gas):
+        return gas.compression(eta=self.eta, PI=self.PI, TAU=self.TAU)
+
+
+class turbine(screw):
+    &#34;&#34;&#34;
+    Turbine
+    -------
+
+    Adiabatic expansion.
+    &#34;&#34;&#34;
+    def __init__(self,
+                 eta,
+                 PI=None,
+                 TAU=None):
+        &#34;&#34;&#34;
+        :type eta: float
+        :type PI:  float
+        :type TAU: float
+        &#34;&#34;&#34;
+        super().__init__(eta=eta,
+                         PI=PI,
+                         TAU=TAU)
+
+    def tf(self, gas):
+        &#34;&#34;&#34;
+        Before runtime, if no total pressure or temperature
+        ratio has been provided, a minimum total temperature
+        ratio is calculated.
+        This temperature ratio is that required to power the
+        work exerting components in the turbine&#39;s shaft.
+        &#34;&#34;&#34;
+        if isinstance(self.PI, type(None)) and isinstance(self.TAU, type(None)):
+            t00 = self.stream.gas.t0
+            t01 = self.stream.gas.t0 - self.shaft.w_r()/(self.stream.gas.mf*self.stream.gas.cp(t00))
+            self.TAU = t01/t00
+
+        return gas.expansion(eta=self.eta, PI=self.PI, TAU=self.TAU)
+
+    def w_r(self):
+        return self.shaft.w_r()
 
 
 class fan(screw):
@@ -212,7 +212,7 @@ float
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">class compressor(component):
+<pre><code class="python">class compressor(screw):
     &#34;&#34;&#34;
     Compressor
     ----------
@@ -228,15 +228,16 @@ float
         :type PI:  float
         :type TAU: float
         &#34;&#34;&#34;
-        self.eta = eta
-        self.PI  = PI
-        self.TAU = TAU
+        super().__init__(eta=eta,
+                         PI=PI,
+                         TAU=TAU)
 
     def tf(self, gas):
         return gas.compression(eta=self.eta, PI=self.PI, TAU=self.TAU)</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
+<li><a title="huracan.components.rotary.screw" href="#huracan.components.rotary.screw">screw</a></li>
 <li><a title="huracan.engine.component" href="../engine.html#huracan.engine.component">component</a></li>
 </ul>
 <h3>Methods</h3>
@@ -491,8 +492,10 @@ float
 </ul>
 <h3>Subclasses</h3>
 <ul class="hlist">
+<li><a title="huracan.components.rotary.compressor" href="#huracan.components.rotary.compressor">compressor</a></li>
 <li><a title="huracan.components.rotary.fan" href="#huracan.components.rotary.fan">fan</a></li>
 <li><a title="huracan.components.rotary.prop" href="#huracan.components.rotary.prop">prop</a></li>
+<li><a title="huracan.components.rotary.turbine" href="#huracan.components.rotary.turbine">turbine</a></li>
 </ul>
 </dd>
 <dt id="huracan.components.rotary.turbine"><code class="flex name class">
@@ -510,7 +513,7 @@ float
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">class turbine(component):
+<pre><code class="python">class turbine(screw):
     &#34;&#34;&#34;
     Turbine
     -------
@@ -526,9 +529,9 @@ float
         :type PI:  float
         :type TAU: float
         &#34;&#34;&#34;
-        self.eta = eta
-        self.PI  = PI
-        self.TAU = TAU
+        super().__init__(eta=eta,
+                         PI=PI,
+                         TAU=TAU)
 
     def tf(self, gas):
         &#34;&#34;&#34;
@@ -550,6 +553,7 @@ float
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
+<li><a title="huracan.components.rotary.screw" href="#huracan.components.rotary.screw">screw</a></li>
 <li><a title="huracan.engine.component" href="../engine.html#huracan.engine.component">component</a></li>
 </ul>
 <h3>Methods</h3>
