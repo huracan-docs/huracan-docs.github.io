@@ -121,6 +121,9 @@ class gas(fluid):
         self.p_0 = p_0
 
         self.absolute()
+        
+        # Set the gas&#39; initial entropy as 0
+        self.S = 0
 
     def state(self):
         &#34;&#34;&#34;
@@ -129,9 +132,9 @@ class gas(fluid):
         - S - Specific entropy
         - H - Specific enthalpy
         &#34;&#34;&#34;
-        self.V = self.t0*R/self.p0
-        self.S = 1                          #TODO: implement
-        self.H = 1                          #TODO: implement
+        self.V  =  self.t0*R/self.p0
+        self.E  =  self.cp(self.t0)/self.k(self.t0)*self.t0
+        self.H  =  self.E + self.p0*self.V
 
     def __add__(self, other):
         &#34;&#34;&#34;
@@ -373,6 +376,8 @@ class gas(fluid):
 
         self.t0 = p.t01
         self.p0 = p.p01
+
+        self.S  += Q_ex/self.t0
 
         self.state()
 
@@ -626,6 +631,9 @@ float</p></div>
         self.p_0 = p_0
 
         self.absolute()
+        
+        # Set the gas&#39; initial entropy as 0
+        self.S = 0
 
     def state(self):
         &#34;&#34;&#34;
@@ -634,9 +642,9 @@ float</p></div>
         - S - Specific entropy
         - H - Specific enthalpy
         &#34;&#34;&#34;
-        self.V = self.t0*R/self.p0
-        self.S = 1                          #TODO: implement
-        self.H = 1                          #TODO: implement
+        self.V  =  self.t0*R/self.p0
+        self.E  =  self.cp(self.t0)/self.k(self.t0)*self.t0
+        self.H  =  self.E + self.p0*self.V
 
     def __add__(self, other):
         &#34;&#34;&#34;
@@ -878,6 +886,8 @@ float</p></div>
 
         self.t0 = p.t01
         self.p0 = p.p01
+
+        self.S  += Q_ex/self.t0
 
         self.state()
 
@@ -1233,6 +1243,8 @@ float</p></div>
     self.t0 = p.t01
     self.p0 = p.p01
 
+    self.S  += Q_ex/self.t0
+
     self.state()
 
     return p</code></pre>
@@ -1257,9 +1269,9 @@ float</p></div>
     - S - Specific entropy
     - H - Specific enthalpy
     &#34;&#34;&#34;
-    self.V = self.t0*R/self.p0
-    self.S = 1                          #TODO: implement
-    self.H = 1                          #TODO: implement</code></pre>
+    self.V  =  self.t0*R/self.p0
+    self.E  =  self.cp(self.t0)/self.k(self.t0)*self.t0
+    self.H  =  self.E + self.p0*self.V</code></pre>
 </details>
 </dd>
 </dl>
