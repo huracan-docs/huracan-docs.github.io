@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.10.0" />
-<title>huracan.components.electrical API documentation</title>
-<meta name="description" content="" />
+<title>huracan.components.power.electrical API documentation</title>
+<meta name="description" content="Electrical power plants" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
 <link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
@@ -19,33 +19,27 @@
 <main>
 <article id="content">
 <header>
-<h1 class="title">Module <code>huracan.components.electrical</code></h1>
+<h1 class="title">Module <code>huracan.components.power.electrical</code></h1>
 </header>
 <section id="section-intro">
+<h2 id="electrical-power-plants">Electrical power plants</h2>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from huracan.engine import component
+<pre><code class="python"># SPDX-FileCopyrightText: © 2021 Antonio López Rivera &lt;antonlopezr99@gmail.com&gt;
+# SPDX-License-Identifier: MPL-2.0
+
+&#34;&#34;&#34;
+Electrical power plants
+-----------------------
+&#34;&#34;&#34;
+
+from huracan.engine import component
+from huracan.components.power import plant
 
 
-class power_plant(component):
-    &#34;&#34;&#34;
-    Aircraft electrical power plant
-    -------------------------------
-    &#34;&#34;&#34;
-    def __init__(self,
-                 w,
-                 eta_g=1,
-                 eta_c=1):
-        &#34;&#34;&#34;
-        :param w:     [W] Power required by the electrical power plant.
-        :param eta_g: [-] Efficiency of the electrical generator attached
-                          to the turbine.
-        :param eta_c: [-] Efficiency of the electrical power distribution
-                          grid of the aircraft.
-        &#34;&#34;&#34;
-        self.w_r = w/eta_g/eta_c</code></pre>
+# TODO: implement electrical power plant</code></pre>
 </details>
 </section>
 <section>
@@ -55,66 +49,19 @@ class power_plant(component):
 <section>
 </section>
 <section>
-<h2 class="section-title" id="header-classes">Classes</h2>
-<dl>
-<dt id="huracan.components.electrical.power_plant"><code class="flex name class">
-<span>class <span class="ident">power_plant</span></span>
-<span>(</span><span>w, eta_g=1, eta_c=1)</span>
-</code></dt>
-<dd>
-<div class="desc"><h2 id="aircraft-electrical-power-plant">Aircraft Electrical Power Plant</h2>
-<p>:param w:
-[W] Power required by the electrical power plant.
-:param eta_g: [-] Efficiency of the electrical generator attached
-to the turbine.
-:param eta_c: [-] Efficiency of the electrical power distribution
-grid of the aircraft.</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">class power_plant(component):
-    &#34;&#34;&#34;
-    Aircraft electrical power plant
-    -------------------------------
-    &#34;&#34;&#34;
-    def __init__(self,
-                 w,
-                 eta_g=1,
-                 eta_c=1):
-        &#34;&#34;&#34;
-        :param w:     [W] Power required by the electrical power plant.
-        :param eta_g: [-] Efficiency of the electrical generator attached
-                          to the turbine.
-        :param eta_c: [-] Efficiency of the electrical power distribution
-                          grid of the aircraft.
-        &#34;&#34;&#34;
-        self.w_r = w/eta_g/eta_c</code></pre>
-</details>
-<h3>Ancestors</h3>
-<ul class="hlist">
-<li><a title="huracan.engine.component" href="../engine.html#huracan.engine.component">component</a></li>
-</ul>
-</dd>
-</dl>
 </section>
 </article>
 <nav id="sidebar">
 <h1>Index</h1>
 <div class="toc">
-<ul></ul>
+<ul>
+<li><a href="#electrical-power-plants">Electrical power plants</a></li>
+</ul>
 </div>
 <ul id="index">
 <li><h3>Super-module</h3>
 <ul>
-<li><code><a title="huracan.components" href="index.html">huracan.components</a></code></li>
-</ul>
-</li>
-<li><h3><a href="#header-classes">Classes</a></h3>
-<ul>
-<li>
-<h4><code><a title="huracan.components.electrical.power_plant" href="#huracan.components.electrical.power_plant">power_plant</a></code></h4>
-</li>
+<li><code><a title="huracan.components.power" href="index.html">huracan.components.power</a></code></li>
 </ul>
 </li>
 </ul>

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.10.0" />
 <title>huracan.engine API documentation</title>
-<meta name="description" content="" />
+<meta name="description" content="Huracan engine elements" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
 <link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
@@ -22,11 +22,20 @@
 <h1 class="title">Module <code>huracan.engine</code></h1>
 </header>
 <section id="section-intro">
+<h2 id="huracan-engine-elements">Huracan engine elements</h2>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">import numpy as np
+<pre><code class="python"># SPDX-FileCopyrightText: © 2021 Antonio López Rivera &lt;antonlopezr99@gmail.com&gt;
+# SPDX-License-Identifier: MPL-2.0
+
+&#34;&#34;&#34;
+Huracan engine elements
+-----------------------
+&#34;&#34;&#34;
+
+import numpy as np
 from copy import deepcopy
 
 from mpl_plotter import figure
@@ -312,8 +321,11 @@ class stream:
                  &#39;compressor&#39;:         &#39;cp&#39;,
                  &#39;combustion_chamber&#39;: &#39;cc&#39;,
                  &#39;turbine&#39;:            &#39;tb&#39;,
+                 &#39;nozzle&#39;:             &#39;nz&#39;,
+
+                 &#39;intercooler&#39;:        &#39;ic&#39;,
+                 &#39;recuperator&#39;:        &#39;rc&#39;,
                  &#39;afterburner&#39;:        &#39;ab&#39;,
-                 &#39;nozzle&#39;:             &#39;nz&#39;
                  }
 
         code = codes[c.__class__.__name__] + self._n_instances(c)
@@ -1251,8 +1263,9 @@ class system:
 </details>
 <h3>Subclasses</h3>
 <ul class="hlist">
-<li><a title="huracan.components.combustion.combustor" href="components/combustion.html#huracan.components.combustion.combustor">combustor</a></li>
-<li><a title="huracan.components.electrical.power_plant" href="components/electrical.html#huracan.components.electrical.power_plant">power_plant</a></li>
+<li><a title="huracan.components.heat_exchangers.heat_sink" href="components/heat_exchangers.html#huracan.components.heat_exchangers.heat_sink">heat_sink</a></li>
+<li><a title="huracan.components.power.combustion.combustor" href="components/power/combustion.html#huracan.components.power.combustion.combustor">combustor</a></li>
+<li><a title="huracan.components.power.sinks.electrical_system" href="components/power/sinks.html#huracan.components.power.sinks.electrical_system">electrical_system</a></li>
 <li><a title="huracan.components.rotary.compressor" href="components/rotary.html#huracan.components.rotary.compressor">compressor</a></li>
 <li><a title="huracan.components.rotary.screw" href="components/rotary.html#huracan.components.rotary.screw">screw</a></li>
 <li><a title="huracan.components.rotary.turbine" href="components/rotary.html#huracan.components.rotary.turbine">turbine</a></li>
@@ -1628,8 +1641,11 @@ float
                  &#39;compressor&#39;:         &#39;cp&#39;,
                  &#39;combustion_chamber&#39;: &#39;cc&#39;,
                  &#39;turbine&#39;:            &#39;tb&#39;,
+                 &#39;nozzle&#39;:             &#39;nz&#39;,
+
+                 &#39;intercooler&#39;:        &#39;ic&#39;,
+                 &#39;recuperator&#39;:        &#39;rc&#39;,
                  &#39;afterburner&#39;:        &#39;ab&#39;,
-                 &#39;nozzle&#39;:             &#39;nz&#39;
                  }
 
         code = codes[c.__class__.__name__] + self._n_instances(c)
@@ -3328,7 +3344,9 @@ exit.</p></div>
 <nav id="sidebar">
 <h1>Index</h1>
 <div class="toc">
-<ul></ul>
+<ul>
+<li><a href="#huracan-engine-elements">Huracan engine elements</a></li>
+</ul>
 </div>
 <ul id="index">
 <li><h3>Super-module</h3>

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.10.0" />
 <title>huracan.thermo.fluids API documentation</title>
-<meta name="description" content="" />
+<meta name="description" content="Huracan fluid models" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
 <link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
@@ -22,15 +22,24 @@
 <h1 class="title">Module <code>huracan.thermo.fluids</code></h1>
 </header>
 <section id="section-intro">
+<h2 id="huracan-fluid-models">Huracan fluid models</h2>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from copy import deepcopy
+<pre><code class="python"># SPDX-FileCopyrightText: © 2021 Antonio López Rivera &lt;antonlopezr99@gmail.com&gt;
+# SPDX-License-Identifier: MPL-2.0
+
+&#34;&#34;&#34;
+Huracan fluid models
+--------------------
+&#34;&#34;&#34;
+
+from copy import deepcopy
 
 from huracan.constants import R
 from huracan.engine import stream, component
-from huracan.thermo.processes import absolute, diffusion, compression, combustion, expansion
+from huracan.thermo.processes import absolute, diffusion, compression, heat_exchange, expansion
 
 
 class fluid:
@@ -327,34 +336,40 @@ class gas(fluid):
 
         return p
 
-    def heat_addition(self,
+    def heat_exchange(self,
                       eta,
                       cp,
-                      fuel_mf,
-                      fuel_LHV,
+                      Q_ex,
                       PI=1):
         &#34;&#34;&#34;
-        Constant pressure heat addition
-        -------------------------------
+        Isobaric heat exchange
+        ----------------------
 
         Assumptions:
         - Perfect heat addition
-        - Constant pressure
 
-        :param eta:      Isentropic efficiency
-        :param cp:       Specific heat of gas during heat addition
-        :param fuel_mf:  Fuel mass flow
-        :param fuel_LHV: Fuel Lower Heating Value (heat of combustion)
+        The pressure ratio is assumed to be constant,
+        however a pressure ratio different than 1 can
+        be input to the function in case the process
+        cannot be assumed to be isobaric.
+
+        :param eta:  Isentropic efficiency
+        :param cp:   Specific heat of gas during heat addition
+        :param Q_ex: Heat received by the gas in the heat exchange
+
+        :type eta:   float
+        :type cp:    float
+        :type Q_ex:  float
+        :type PI:    float
         &#34;&#34;&#34;
 
-        p = combustion(mf       = self.mf,
-                       cp       = cp,
-                       t00      = self.t0,
-                       p00      = self.p0,
-                       fuel_mf  = fuel_mf,
-                       fuel_LHV = fuel_LHV,
-                       eta      = eta,
-                       PI       = PI)
+        p = heat_exchange(mf       = self.mf,
+                          cp       = cp,
+                          t00      = self.t0,
+                          p00      = self.p0,
+                          Q_ex     = Q_ex,
+                          eta      = eta,
+                          PI       = PI)
 
         self.t0 = p.t01
         self.p0 = p.p01
@@ -826,34 +841,40 @@ float</p></div>
 
         return p
 
-    def heat_addition(self,
+    def heat_exchange(self,
                       eta,
                       cp,
-                      fuel_mf,
-                      fuel_LHV,
+                      Q_ex,
                       PI=1):
         &#34;&#34;&#34;
-        Constant pressure heat addition
-        -------------------------------
+        Isobaric heat exchange
+        ----------------------
 
         Assumptions:
         - Perfect heat addition
-        - Constant pressure
 
-        :param eta:      Isentropic efficiency
-        :param cp:       Specific heat of gas during heat addition
-        :param fuel_mf:  Fuel mass flow
-        :param fuel_LHV: Fuel Lower Heating Value (heat of combustion)
+        The pressure ratio is assumed to be constant,
+        however a pressure ratio different than 1 can
+        be input to the function in case the process
+        cannot be assumed to be isobaric.
+
+        :param eta:  Isentropic efficiency
+        :param cp:   Specific heat of gas during heat addition
+        :param Q_ex: Heat received by the gas in the heat exchange
+
+        :type eta:   float
+        :type cp:    float
+        :type Q_ex:  float
+        :type PI:    float
         &#34;&#34;&#34;
 
-        p = combustion(mf       = self.mf,
-                       cp       = cp,
-                       t00      = self.t0,
-                       p00      = self.p0,
-                       fuel_mf  = fuel_mf,
-                       fuel_LHV = fuel_LHV,
-                       eta      = eta,
-                       PI       = PI)
+        p = heat_exchange(mf       = self.mf,
+                          cp       = cp,
+                          t00      = self.t0,
+                          p00      = self.p0,
+                          Q_ex     = Q_ex,
+                          eta      = eta,
+                          PI       = PI)
 
         self.t0 = p.t01
         self.p0 = p.p01
@@ -1146,53 +1167,68 @@ process instance</p></div>
     return p</code></pre>
 </details>
 </dd>
-<dt id="huracan.thermo.fluids.gas.heat_addition"><code class="name flex">
-<span>def <span class="ident">heat_addition</span></span>(<span>self, eta, cp, fuel_mf, fuel_LHV, PI=1)</span>
+<dt id="huracan.thermo.fluids.gas.heat_exchange"><code class="name flex">
+<span>def <span class="ident">heat_exchange</span></span>(<span>self, eta, cp, Q_ex, PI=1)</span>
 </code></dt>
 <dd>
-<div class="desc"><h2 id="constant-pressure-heat-addition">Constant Pressure Heat Addition</h2>
+<div class="desc"><h2 id="isobaric-heat-exchange">Isobaric Heat Exchange</h2>
 <p>Assumptions:
-- Perfect heat addition
-- Constant pressure</p>
+- Perfect heat addition</p>
+<p>The pressure ratio is assumed to be constant,
+however a pressure ratio different than 1 can
+be input to the function in case the process
+cannot be assumed to be isobaric.</p>
 <p>:param eta:
 Isentropic efficiency
 :param cp:
 Specific heat of gas during heat addition
-:param fuel_mf:
-Fuel mass flow
-:param fuel_LHV: Fuel Lower Heating Value (heat of combustion)</p></div>
+:param Q_ex: Heat received by the gas in the heat exchange</p>
+<p>:type eta:
+float
+:type cp:
+float
+:type Q_ex:
+float
+:type PI:
+float</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def heat_addition(self,
+<pre><code class="python">def heat_exchange(self,
                   eta,
                   cp,
-                  fuel_mf,
-                  fuel_LHV,
+                  Q_ex,
                   PI=1):
     &#34;&#34;&#34;
-    Constant pressure heat addition
-    -------------------------------
+    Isobaric heat exchange
+    ----------------------
 
     Assumptions:
     - Perfect heat addition
-    - Constant pressure
 
-    :param eta:      Isentropic efficiency
-    :param cp:       Specific heat of gas during heat addition
-    :param fuel_mf:  Fuel mass flow
-    :param fuel_LHV: Fuel Lower Heating Value (heat of combustion)
+    The pressure ratio is assumed to be constant,
+    however a pressure ratio different than 1 can
+    be input to the function in case the process
+    cannot be assumed to be isobaric.
+
+    :param eta:  Isentropic efficiency
+    :param cp:   Specific heat of gas during heat addition
+    :param Q_ex: Heat received by the gas in the heat exchange
+
+    :type eta:   float
+    :type cp:    float
+    :type Q_ex:  float
+    :type PI:    float
     &#34;&#34;&#34;
 
-    p = combustion(mf       = self.mf,
-                   cp       = cp,
-                   t00      = self.t0,
-                   p00      = self.p0,
-                   fuel_mf  = fuel_mf,
-                   fuel_LHV = fuel_LHV,
-                   eta      = eta,
-                   PI       = PI)
+    p = heat_exchange(mf       = self.mf,
+                      cp       = cp,
+                      t00      = self.t0,
+                      p00      = self.p0,
+                      Q_ex     = Q_ex,
+                      eta      = eta,
+                      PI       = PI)
 
     self.t0 = p.t01
     self.p0 = p.p01
@@ -1316,7 +1352,7 @@ gas or mixture</p></div>
 <li><code><a title="huracan.thermo.fluids.gas.compression" href="#huracan.thermo.fluids.gas.compression">compression</a></code></li>
 <li><code><a title="huracan.thermo.fluids.gas.diffusion" href="#huracan.thermo.fluids.gas.diffusion">diffusion</a></code></li>
 <li><code><a title="huracan.thermo.fluids.gas.expansion" href="#huracan.thermo.fluids.gas.expansion">expansion</a></code></li>
-<li><code><a title="huracan.thermo.fluids.gas.heat_addition" href="#huracan.thermo.fluids.gas.heat_addition">heat_addition</a></code></li>
+<li><code><a title="huracan.thermo.fluids.gas.heat_exchange" href="#huracan.thermo.fluids.gas.heat_exchange">heat_exchange</a></code></li>
 <li><code><a title="huracan.thermo.fluids.gas.state" href="#huracan.thermo.fluids.gas.state">state</a></code></li>
 </ul>
 </li>
@@ -1328,7 +1364,9 @@ gas or mixture</p></div>
 <nav id="sidebar">
 <h1>Index</h1>
 <div class="toc">
-<ul></ul>
+<ul>
+<li><a href="#huracan-fluid-models">Huracan fluid models</a></li>
+</ul>
 </div>
 <ul id="index">
 <li><h3>Super-module</h3>
@@ -1351,7 +1389,7 @@ gas or mixture</p></div>
 <li><code><a title="huracan.thermo.fluids.gas.compression" href="#huracan.thermo.fluids.gas.compression">compression</a></code></li>
 <li><code><a title="huracan.thermo.fluids.gas.diffusion" href="#huracan.thermo.fluids.gas.diffusion">diffusion</a></code></li>
 <li><code><a title="huracan.thermo.fluids.gas.expansion" href="#huracan.thermo.fluids.gas.expansion">expansion</a></code></li>
-<li><code><a title="huracan.thermo.fluids.gas.heat_addition" href="#huracan.thermo.fluids.gas.heat_addition">heat_addition</a></code></li>
+<li><code><a title="huracan.thermo.fluids.gas.heat_exchange" href="#huracan.thermo.fluids.gas.heat_exchange">heat_exchange</a></code></li>
 <li><code><a title="huracan.thermo.fluids.gas.state" href="#huracan.thermo.fluids.gas.state">state</a></code></li>
 </ul>
 </li>

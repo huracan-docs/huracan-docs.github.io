@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.10.0" />
 <title>huracan.thermo.processes API documentation</title>
-<meta name="description" content="" />
+<meta name="description" content="Huracan thermodynamic process functions" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
 <link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
@@ -22,11 +22,20 @@
 <h1 class="title">Module <code>huracan.thermo.processes</code></h1>
 </header>
 <section id="section-intro">
+<h2 id="huracan-thermodynamic-process-functions">Huracan thermodynamic process functions</h2>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from huracan.utils import setattr_namespace
+<pre><code class="python"># SPDX-FileCopyrightText: © 2021 Antonio López Rivera &lt;antonlopezr99@gmail.com&gt;
+# SPDX-License-Identifier: MPL-2.0
+
+&#34;&#34;&#34;
+Huracan thermodynamic process functions
+---------------------------------------
+&#34;&#34;&#34;
+
+from huracan.utils import setattr_namespace
 
 
 class process:
@@ -243,6 +252,42 @@ def expansion(mf, cp, k, t00, p00,
     return p
 
 
+def heat_exchange(mf, cp,
+                  t00, p00,
+                  Q_ex,
+                  eta,
+                  PI=1):
+    &#34;&#34;&#34;
+    Constant pressure heat addition.
+    - A pressure ratio PI may be specified if required.
+
+    :param mf:       [kg/s] Gas mass flow
+    :param cp:       [-]    Constant pressure specific heat
+    :param t00:      [K]    Initial total temperature
+    :param p00:      [Pa]   Initial total pressure
+    :param Q_ex:     [K]    Heat received by the gas in the heat exchange
+    :param eta:      [-]    Isentropic efficiency
+
+    :type mf:        float
+    :type fuel_mf:   float
+    :type fuel_LHV:  float
+    :type t00:       float
+    :type p00:       float
+    :type eta:       float
+    &#34;&#34;&#34;
+
+    p = process()
+
+    dt = eta*Q_ex/(mf*cp)
+
+    t01 = t00 + dt
+    p01 = p00*PI
+
+    setattr_namespace(p, locals())
+
+    return p
+
+
 def combustion(mf, cp,
                t00, p00,
                fuel_mf, fuel_LHV,
@@ -268,16 +313,14 @@ def combustion(mf, cp,
     :type eta:       float
     &#34;&#34;&#34;
 
-    p = process()
+    Q_in = (fuel_mf*fuel_LHV)
 
-    dt = eta*(fuel_mf*fuel_LHV)/(mf*cp)
-
-    t01 = t00 + dt
-    p01 = p00*PI
-
-    setattr_namespace(p, locals())
-
-    return p</code></pre>
+    return heat_exchange(mf=mf, cp=cp,
+                         t00=t00, p00=p00,
+                         Q_ex=Q_in,
+                         eta=eta,
+                         PI=PI
+                         )</code></pre>
 </details>
 </section>
 <section>
@@ -418,16 +461,14 @@ float</p></div>
     :type eta:       float
     &#34;&#34;&#34;
 
-    p = process()
+    Q_in = (fuel_mf*fuel_LHV)
 
-    dt = eta*(fuel_mf*fuel_LHV)/(mf*cp)
-
-    t01 = t00 + dt
-    p01 = p00*PI
-
-    setattr_namespace(p, locals())
-
-    return p</code></pre>
+    return heat_exchange(mf=mf, cp=cp,
+                         t00=t00, p00=p00,
+                         Q_ex=Q_in,
+                         eta=eta,
+                         PI=PI
+                         )</code></pre>
 </details>
 </dd>
 <dt id="huracan.thermo.processes.compression"><code class="name flex">
@@ -784,6 +825,81 @@ process instance</p></div>
     return p</code></pre>
 </details>
 </dd>
+<dt id="huracan.thermo.processes.heat_exchange"><code class="name flex">
+<span>def <span class="ident">heat_exchange</span></span>(<span>mf, cp, t00, p00, Q_ex, eta, PI=1)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Constant pressure heat addition.
+- A pressure ratio PI may be specified if required.</p>
+<p>:param mf:
+[kg/s] Gas mass flow
+:param cp:
+[-]
+Constant pressure specific heat
+:param t00:
+[K]
+Initial total temperature
+:param p00:
+[Pa]
+Initial total pressure
+:param Q_ex:
+[K]
+Heat received by the gas in the heat exchange
+:param eta:
+[-]
+Isentropic efficiency</p>
+<p>:type mf:
+float
+:type fuel_mf:
+float
+:type fuel_LHV:
+float
+:type t00:
+float
+:type p00:
+float
+:type eta:
+float</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def heat_exchange(mf, cp,
+                  t00, p00,
+                  Q_ex,
+                  eta,
+                  PI=1):
+    &#34;&#34;&#34;
+    Constant pressure heat addition.
+    - A pressure ratio PI may be specified if required.
+
+    :param mf:       [kg/s] Gas mass flow
+    :param cp:       [-]    Constant pressure specific heat
+    :param t00:      [K]    Initial total temperature
+    :param p00:      [Pa]   Initial total pressure
+    :param Q_ex:     [K]    Heat received by the gas in the heat exchange
+    :param eta:      [-]    Isentropic efficiency
+
+    :type mf:        float
+    :type fuel_mf:   float
+    :type fuel_LHV:  float
+    :type t00:       float
+    :type p00:       float
+    :type eta:       float
+    &#34;&#34;&#34;
+
+    p = process()
+
+    dt = eta*Q_ex/(mf*cp)
+
+    t01 = t00 + dt
+    p01 = p00*PI
+
+    setattr_namespace(p, locals())
+
+    return p</code></pre>
+</details>
+</dd>
 </dl>
 </section>
 <section>
@@ -811,7 +927,9 @@ process instance</p></div>
 <nav id="sidebar">
 <h1>Index</h1>
 <div class="toc">
-<ul></ul>
+<ul>
+<li><a href="#huracan-thermodynamic-process-functions">Huracan thermodynamic process functions</a></li>
+</ul>
 </div>
 <ul id="index">
 <li><h3>Super-module</h3>
@@ -820,12 +938,13 @@ process instance</p></div>
 </ul>
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
-<ul class="">
+<ul class="two-column">
 <li><code><a title="huracan.thermo.processes.absolute" href="#huracan.thermo.processes.absolute">absolute</a></code></li>
 <li><code><a title="huracan.thermo.processes.combustion" href="#huracan.thermo.processes.combustion">combustion</a></code></li>
 <li><code><a title="huracan.thermo.processes.compression" href="#huracan.thermo.processes.compression">compression</a></code></li>
 <li><code><a title="huracan.thermo.processes.diffusion" href="#huracan.thermo.processes.diffusion">diffusion</a></code></li>
 <li><code><a title="huracan.thermo.processes.expansion" href="#huracan.thermo.processes.expansion">expansion</a></code></li>
+<li><code><a title="huracan.thermo.processes.heat_exchange" href="#huracan.thermo.processes.heat_exchange">heat_exchange</a></code></li>
 </ul>
 </li>
 <li><h3><a href="#header-classes">Classes</a></h3>
