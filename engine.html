@@ -488,17 +488,14 @@ class stream:
 
         for k in dir(self):
             v = getattr(self, k)
-            print(&#39;A&#39;)
-            print(k, type(v), isinstance(v, types.MethodType))
             # If the attribute k is:
             #    - a method
             #    - which is not special
             #    - whose name is the name of another method in the stream&#39;s sytem
             if isinstance(v, types.MethodType) and not re.match(special, k) and k in dir(self.system):
+                # Create private method
                 setattr(self, &#39;_&#39; + k, v)
-
-                print(getattr(self, &#39;_&#39; + k))
-
+                # Replace public method by takeover
                 setattr(self, k, takeover(self, k))
 
     &#34;&#34;&#34;
@@ -563,10 +560,10 @@ class stream:
         &#34;&#34;&#34;
         Nozzle exit area
         &#34;&#34;&#34;
-        return self.gas.mf*R*self.gas.t0/(self.gas.p0*self._v_exit())
+        return self.gas.mf*R*self.gas.t0/(self.gas.p0*self.v_exit())
 
     &#34;&#34;&#34;
-    Stream performance analysis
+    Fuel consumption
     &#34;&#34;&#34;
     def fmf(self):
         &#34;&#34;&#34;
@@ -578,41 +575,50 @@ class stream:
                 fmf += c.fuel.mf
         return fmf
 
-    def flow_thrust(self):
+    &#34;&#34;&#34;
+    Thrust and specific fuel consumption
+    &#34;&#34;&#34;
+    def thrust_flow(self):
         &#34;&#34;&#34;
         Flow thrust
 
         If the flow is choked, the expansion of the gas contributes to the thrust of the flow.
         &#34;&#34;&#34;
         if self.choked:
-            return self.gas.mf * (self._v_exit() - self.gas.v_0) + self._A_exit() * (
+            return self.gas.mf * (self.v_exit() - self.gas.v_0) + self.A_exit() * (
                         self.gas.p0 - self.gas.p_0)
         else:
-            return self.gas.mf * (self._v_exit() - self.gas.v_0)
+            return self.gas.mf * (self.v_exit() - self.gas.v_0)
 
-    def prop_thrust(self):
+    def thrust_prop(self):
         &#34;&#34;&#34;
         Propeller/propfan thrust
         &#34;&#34;&#34;
         if any([c.__class__.__name__ in [&#39;prop&#39;, &#39;propfan&#39;] for c in self.components]):
             propellers = [c for c in self.components if c.__class__.__name__ in [&#39;prop&#39;, &#39;propfan&#39;]]
-            prop_thrust = sum([prop.thrust(self.gas.v_0) for prop in propellers])
+            thrust_prop = sum([prop.thrust(self.gas.v_0) for prop in propellers])
         else:
-            prop_thrust = 0
-        return prop_thrust
+            thrust_prop = 0
+        return thrust_prop
 
-    def total_thrust(self):
+    def thrust_total(self):
         &#34;&#34;&#34;
         Flow thrust plus propeller/propfan thrust
         &#34;&#34;&#34;
-        return self._flow_thrust() + self._prop_thrust()
+        return self.thrust_flow() + self.thrust_prop()
 
     def sfc(self):
         &#34;&#34;&#34;
         Specific fuel consumption
         &#34;&#34;&#34;
-        return self.fmf()/self.flow_thrust()
+        if hasattr(self, &#39;system&#39;):
+            return self._fmf()/self._thrust_flow()
+        else:
+            return self.fmf()/self.thrust_flow()
 
+    &#34;&#34;&#34;
+    Heat and work
+    &#34;&#34;&#34;
     def Q_in(self):                #TODO: verify efficiency calculations
         &#34;&#34;&#34;
         Heat provided to the flow.
@@ -636,29 +642,47 @@ class stream:
                 w_required += c.w
         return w_required
 
-    def E_balance(self):
+    &#34;&#34;&#34;
+    Power
+    &#34;&#34;&#34;
+    def power_jet(self):
         &#34;&#34;&#34;
-        Flow energy balance.
+        Stream jet power.
         &#34;&#34;&#34;
-        return self._Q_in() - self._W_req()
+        return 1/2*(self.gas.mf*self.v_exit()**2 - (self.gas.mf - self.fmf())*self.gas.v_0**2)
 
-    def E_prop(self):
+    def power_available(self):
         &#34;&#34;&#34;
-        Energy added to the flow for propulsion.
+        Stream available power.
         &#34;&#34;&#34;
-        return self._v_exit()**2/2
+        if hasattr(self, &#39;system&#39;):
+            return self._efficiency_prop()*self._power_jet()
+        else:
+            return self.efficiency_prop()*self.power_jet()
 
-    def efficiency(self):
+    &#34;&#34;&#34;
+    Efficiencies
+    &#34;&#34;&#34;
+    def efficiency_thermal(self):
         &#34;&#34;&#34;
-        Engine efficiency
+        Stream thermal efficiency
         &#34;&#34;&#34;
-        return self._E_balance()/self._Q_in()
+        if hasattr(self, &#39;system&#39;):
+            return self._power_jet()/self._Q_in()
+        else:
+            return self.power_jet()/self.Q_in()
 
-    def prop_efficiency(self):
+    def efficiency_prop(self):
         &#34;&#34;&#34;
         Stream propulsive efficiency.
         &#34;&#34;&#34;
-        return self._E_prop()/self._Q_in()
+        return 2/(1+self.v_exit()/self.gas.v_0)
+
+    def efficiency_total(self):
+        if hasattr(self, &#39;system&#39;):
+            return self._power_available()/self._Q_in()
+        else:
+            return self.power_available()/self.Q_in()
 
     &#34;&#34;&#34;
     Plots
@@ -669,9 +693,7 @@ class stream:
                  color=colorscheme_one()[0],
                  **kwargs):
         &#34;&#34;&#34;
-        Plot
-        - Total pressure
-        - Total temperature
+        Temperature-Pressure system plot.
         &#34;&#34;&#34;
 
         figure((9, 5))
@@ -695,9 +717,7 @@ class stream:
                  color=colorscheme_one()[0],
                  **kwargs):
         &#34;&#34;&#34;
-        Plot
-        - Total specific volume
-        - Total pressure
+        Pressure-Volume stream plot.
         &#34;&#34;&#34;
 
         figure((9, 5))
@@ -721,9 +741,7 @@ class stream:
                  color=colorscheme_one()[0],
                  **kwargs):
         &#34;&#34;&#34;
-        Plot
-        - Specific entropy
-        - Total temperature
+        Temperature-Entropy stream plot.
         &#34;&#34;&#34;
 
         figure((9, 5))
@@ -747,9 +765,7 @@ class stream:
                  color=colorscheme_one()[0],
                  **kwargs):
         &#34;&#34;&#34;
-        Plot
-        - Specific entropy
-        - Total temperature
+        Pressure-Enthalpy stream plot.
         &#34;&#34;&#34;
 
         figure((9, 5))
@@ -927,83 +943,91 @@ class system:
         return parents
 
     &#34;&#34;&#34;
-    Stream outlet flow characteristics
-    &#34;&#34;&#34;
-    def v_exit(self):
-        &#34;&#34;&#34;
-        Flow exit velocity
-
-        Assumptions:
-        - If the flow is not choked:
-             The thermal energy lost by the gas as it leaves the nozzle
-             is transformed into kinetic energy without losses.
-        - If the flow is choked:
-             The exit velocity is the velocity of sound before the nozzle
-             exit.
-        &#34;&#34;&#34;
-        v = [s._v_exit() for s in self.streams if s not in self.parents()]
-        return v[0] if len(v) == 1 else v
-
-    def A_exit(self):
-        &#34;&#34;&#34;
-        Nozzle exit area
-        &#34;&#34;&#34;
-        a = [s._A_exit() for s in self.streams if &#39;nozzle&#39; in [c.__class__.__name__ for c in s.components]]
-        return a[0] if len(a) == 1 else a
-
-    &#34;&#34;&#34;
-    System performance analysis
+    Fuel consumption
     &#34;&#34;&#34;
     def fmf(self):
+        &#34;&#34;&#34;
+        System fuel mass flow.
+        &#34;&#34;&#34;
         return sum([s._fmf() for s in self.streams])
 
-    def flow_thrust(self):
-        return sum([s._flow_thrust() for s in self.streams if s not in self.parents()])
+    &#34;&#34;&#34;
+    Thrust and specific fuel consumption
+    &#34;&#34;&#34;
+    def thrust_flow(self):
+        &#34;&#34;&#34;
+        System flow thrust.
+        &#34;&#34;&#34;
+        return sum([s._thrust_flow() for s in self.streams if s not in self.parents()])
 
-    def prop_thrust(self):
-        return sum([s._prop_thrust() for s in self.streams])
+    def thrust_prop(self):
+        &#34;&#34;&#34;
+        System propeller thrust
+        &#34;&#34;&#34;
+        return sum([s._thrust_prop() for s in self.streams])
 
-    def total_thrust(self):
-        return self.flow_thrust() + self.prop_thrust()
+    def thrust_total(self):
+        &#34;&#34;&#34;
+        System total thrust.
+        &#34;&#34;&#34;
+        return self.thrust_flow() + self.thrust_prop()
 
     def sfc(self):
-        return self.fmf()/self.flow_thrust()
+        &#34;&#34;&#34;
+        System specific fuel consumption.
+        &#34;&#34;&#34;
+        return self.fmf()/self.thrust_flow()
 
+    &#34;&#34;&#34;
+    Heat and work
+    &#34;&#34;&#34;
     def Q_in(self):                 # TODO: verify efficiency calculations
         &#34;&#34;&#34;
         Heat provided to the flow.
         &#34;&#34;&#34;
-        return sum([s.Q_in() for s in self.streams])
+        return sum([s._Q_in() for s in self.streams])
 
     def W_req(self):
         &#34;&#34;&#34;
         Work required from the flow.
         &#34;&#34;&#34;
-        return sum([s.W_req() for s in self.streams])
+        return sum([s._W_req() for s in self.streams])
 
-    def E_balance(self):
+    &#34;&#34;&#34;
+    Power
+    &#34;&#34;&#34;
+    def power_jet(self):
         &#34;&#34;&#34;
-        Flow energy balance.
+        Stream jet power.
         &#34;&#34;&#34;
-        return self.Q_in() - self.W_req()
+        return sum([s._power_jet() for s in self.streams if s not in self.parents()])
 
-    def E_prop(self):
+    def power_available(self):
         &#34;&#34;&#34;
-        Energy added to the flow for propulsion.
+        Stream available power.
         &#34;&#34;&#34;
-        return sum([s.E_prop() for s in self.streams])
+        return sum([s._power_available() for s in self.streams if s not in self.parents()])
 
-    def efficiency(self):
+    &#34;&#34;&#34;
+    Efficiencies
+    &#34;&#34;&#34;
+    def efficiency_prop(self):
         &#34;&#34;&#34;
-        System efficiency
+        System propulsive efficiency.
         &#34;&#34;&#34;
-        return self.E_balance()/self.Q_in()
+        return self.power_available()/self.power_jet()
 
-    def prop_efficiency(self):
+    def efficiency_thermal(self):
         &#34;&#34;&#34;
-        Stream propulsive efficiency.
+        System thermal efficiency.
         &#34;&#34;&#34;
-        return self.E_prop()/self.Q_in()
+        return self.power_jet()/self.Q_in()
+
+    def efficiency_total(self):
+        &#34;&#34;&#34;
+        System total efficiency.
+        &#34;&#34;&#34;
+        return self.power_available()/self.Q_in()
 
     &#34;&#34;&#34;
     Plots
@@ -1016,6 +1040,9 @@ class system:
              plot_label=None,                  # When called from a _system_takeover the plot_label and color
              color=colorscheme_one()[0],       # arguments are passed to the function, but disregarded.
              **kwargs):
+        &#34;&#34;&#34;
+        General system plot.
+        &#34;&#34;&#34;
         &#34;&#34;&#34;
         System plot
         -----------
@@ -1120,6 +1147,9 @@ class system:
                  color=colorscheme_one()[0],
                  **kwargs
                  ):
+        &#34;&#34;&#34;
+        Temperature-Pressure system plot.
+        &#34;&#34;&#34;
         args = locals()
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
@@ -1133,6 +1163,9 @@ class system:
                  plot_label=None,
                  color=colorscheme_one()[0],
                  **kwargs):
+        &#34;&#34;&#34;
+        Pressure-Volume system plot.
+        &#34;&#34;&#34;
         args = locals()
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
@@ -1146,6 +1179,9 @@ class system:
                  plot_label=None,
                  color=colorscheme_one()[0],
                  **kwargs):
+        &#34;&#34;&#34;
+        Temperature-Entropy system plot.
+        &#34;&#34;&#34;
         args = locals()
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
@@ -1159,6 +1195,9 @@ class system:
                  plot_label=None,
                  color=colorscheme_one()[0],
                  **kwargs):
+        &#34;&#34;&#34;
+        Pressure-Enthalpy system plot.
+        &#34;&#34;&#34;
         args = locals()
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
@@ -1758,17 +1797,14 @@ float
 
         for k in dir(self):
             v = getattr(self, k)
-            print(&#39;A&#39;)
-            print(k, type(v), isinstance(v, types.MethodType))
             # If the attribute k is:
             #    - a method
             #    - which is not special
             #    - whose name is the name of another method in the stream&#39;s sytem
             if isinstance(v, types.MethodType) and not re.match(special, k) and k in dir(self.system):
+                # Create private method
                 setattr(self, &#39;_&#39; + k, v)
-
-                print(getattr(self, &#39;_&#39; + k))
-
+                # Replace public method by takeover
                 setattr(self, k, takeover(self, k))
 
     &#34;&#34;&#34;
@@ -1833,10 +1869,10 @@ float
         &#34;&#34;&#34;
         Nozzle exit area
         &#34;&#34;&#34;
-        return self.gas.mf*R*self.gas.t0/(self.gas.p0*self._v_exit())
+        return self.gas.mf*R*self.gas.t0/(self.gas.p0*self.v_exit())
 
     &#34;&#34;&#34;
-    Stream performance analysis
+    Fuel consumption
     &#34;&#34;&#34;
     def fmf(self):
         &#34;&#34;&#34;
@@ -1848,41 +1884,50 @@ float
                 fmf += c.fuel.mf
         return fmf
 
-    def flow_thrust(self):
+    &#34;&#34;&#34;
+    Thrust and specific fuel consumption
+    &#34;&#34;&#34;
+    def thrust_flow(self):
         &#34;&#34;&#34;
         Flow thrust
 
         If the flow is choked, the expansion of the gas contributes to the thrust of the flow.
         &#34;&#34;&#34;
         if self.choked:
-            return self.gas.mf * (self._v_exit() - self.gas.v_0) + self._A_exit() * (
+            return self.gas.mf * (self.v_exit() - self.gas.v_0) + self.A_exit() * (
                         self.gas.p0 - self.gas.p_0)
         else:
-            return self.gas.mf * (self._v_exit() - self.gas.v_0)
+            return self.gas.mf * (self.v_exit() - self.gas.v_0)
 
-    def prop_thrust(self):
+    def thrust_prop(self):
         &#34;&#34;&#34;
         Propeller/propfan thrust
         &#34;&#34;&#34;
         if any([c.__class__.__name__ in [&#39;prop&#39;, &#39;propfan&#39;] for c in self.components]):
             propellers = [c for c in self.components if c.__class__.__name__ in [&#39;prop&#39;, &#39;propfan&#39;]]
-            prop_thrust = sum([prop.thrust(self.gas.v_0) for prop in propellers])
+            thrust_prop = sum([prop.thrust(self.gas.v_0) for prop in propellers])
         else:
-            prop_thrust = 0
-        return prop_thrust
+            thrust_prop = 0
+        return thrust_prop
 
-    def total_thrust(self):
+    def thrust_total(self):
         &#34;&#34;&#34;
         Flow thrust plus propeller/propfan thrust
         &#34;&#34;&#34;
-        return self._flow_thrust() + self._prop_thrust()
+        return self.thrust_flow() + self.thrust_prop()
 
     def sfc(self):
         &#34;&#34;&#34;
         Specific fuel consumption
         &#34;&#34;&#34;
-        return self.fmf()/self.flow_thrust()
+        if hasattr(self, &#39;system&#39;):
+            return self._fmf()/self._thrust_flow()
+        else:
+            return self.fmf()/self.thrust_flow()
 
+    &#34;&#34;&#34;
+    Heat and work
+    &#34;&#34;&#34;
     def Q_in(self):                #TODO: verify efficiency calculations
         &#34;&#34;&#34;
         Heat provided to the flow.
@@ -1906,29 +1951,47 @@ float
                 w_required += c.w
         return w_required
 
-    def E_balance(self):
+    &#34;&#34;&#34;
+    Power
+    &#34;&#34;&#34;
+    def power_jet(self):
         &#34;&#34;&#34;
-        Flow energy balance.
+        Stream jet power.
         &#34;&#34;&#34;
-        return self._Q_in() - self._W_req()
+        return 1/2*(self.gas.mf*self.v_exit()**2 - (self.gas.mf - self.fmf())*self.gas.v_0**2)
 
-    def E_prop(self):
+    def power_available(self):
         &#34;&#34;&#34;
-        Energy added to the flow for propulsion.
+        Stream available power.
         &#34;&#34;&#34;
-        return self._v_exit()**2/2
+        if hasattr(self, &#39;system&#39;):
+            return self._efficiency_prop()*self._power_jet()
+        else:
+            return self.efficiency_prop()*self.power_jet()
 
-    def efficiency(self):
+    &#34;&#34;&#34;
+    Efficiencies
+    &#34;&#34;&#34;
+    def efficiency_thermal(self):
         &#34;&#34;&#34;
-        Engine efficiency
+        Stream thermal efficiency
         &#34;&#34;&#34;
-        return self._E_balance()/self._Q_in()
+        if hasattr(self, &#39;system&#39;):
+            return self._power_jet()/self._Q_in()
+        else:
+            return self.power_jet()/self.Q_in()
 
-    def prop_efficiency(self):
+    def efficiency_prop(self):
         &#34;&#34;&#34;
         Stream propulsive efficiency.
         &#34;&#34;&#34;
-        return self._E_prop()/self._Q_in()
+        return 2/(1+self.v_exit()/self.gas.v_0)
+
+    def efficiency_total(self):
+        if hasattr(self, &#39;system&#39;):
+            return self._power_available()/self._Q_in()
+        else:
+            return self.power_available()/self.Q_in()
 
     &#34;&#34;&#34;
     Plots
@@ -1939,9 +2002,7 @@ float
                  color=colorscheme_one()[0],
                  **kwargs):
         &#34;&#34;&#34;
-        Plot
-        - Total pressure
-        - Total temperature
+        Temperature-Pressure system plot.
         &#34;&#34;&#34;
 
         figure((9, 5))
@@ -1965,9 +2026,7 @@ float
                  color=colorscheme_one()[0],
                  **kwargs):
         &#34;&#34;&#34;
-        Plot
-        - Total specific volume
-        - Total pressure
+        Pressure-Volume stream plot.
         &#34;&#34;&#34;
 
         figure((9, 5))
@@ -1991,9 +2050,7 @@ float
                  color=colorscheme_one()[0],
                  **kwargs):
         &#34;&#34;&#34;
-        Plot
-        - Specific entropy
-        - Total temperature
+        Temperature-Entropy stream plot.
         &#34;&#34;&#34;
 
         figure((9, 5))
@@ -2017,9 +2074,7 @@ float
                  color=colorscheme_one()[0],
                  **kwargs):
         &#34;&#34;&#34;
-        Plot
-        - Specific entropy
-        - Total temperature
+        Pressure-Enthalpy stream plot.
         &#34;&#34;&#34;
 
         figure((9, 5))
@@ -2108,39 +2163,7 @@ float
     &#34;&#34;&#34;
     Nozzle exit area
     &#34;&#34;&#34;
-    return self.gas.mf*R*self.gas.t0/(self.gas.p0*self._v_exit())</code></pre>
-</details>
-</dd>
-<dt id="huracan.engine.stream.E_balance"><code class="name flex">
-<span>def <span class="ident">E_balance</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Flow energy balance.</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def E_balance(self):
-    &#34;&#34;&#34;
-    Flow energy balance.
-    &#34;&#34;&#34;
-    return self._Q_in() - self._W_req()</code></pre>
-</details>
-</dd>
-<dt id="huracan.engine.stream.E_prop"><code class="name flex">
-<span>def <span class="ident">E_prop</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Energy added to the flow for propulsion.</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def E_prop(self):
-    &#34;&#34;&#34;
-    Energy added to the flow for propulsion.
-    &#34;&#34;&#34;
-    return self._v_exit()**2/2</code></pre>
+    return self.gas.mf*R*self.gas.t0/(self.gas.p0*self.v_exit())</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.H"><code class="name flex">
@@ -2339,43 +2362,55 @@ float
     return main, div</code></pre>
 </details>
 </dd>
-<dt id="huracan.engine.stream.efficiency"><code class="name flex">
-<span>def <span class="ident">efficiency</span></span>(<span>self)</span>
+<dt id="huracan.engine.stream.efficiency_prop"><code class="name flex">
+<span>def <span class="ident">efficiency_prop</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Engine efficiency</p></div>
+<div class="desc"><p>Stream propulsive efficiency.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def efficiency(self):
+<pre><code class="python">def efficiency_prop(self):
     &#34;&#34;&#34;
-    Engine efficiency
+    Stream propulsive efficiency.
     &#34;&#34;&#34;
-    return self._E_balance()/self._Q_in()</code></pre>
+    return 2/(1+self.v_exit()/self.gas.v_0)</code></pre>
 </details>
 </dd>
-<dt id="huracan.engine.stream.flow_thrust"><code class="name flex">
-<span>def <span class="ident">flow_thrust</span></span>(<span>self)</span>
+<dt id="huracan.engine.stream.efficiency_thermal"><code class="name flex">
+<span>def <span class="ident">efficiency_thermal</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Flow thrust</p>
-<p>If the flow is choked, the expansion of the gas contributes to the thrust of the flow.</p></div>
+<div class="desc"><p>Stream thermal efficiency</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def flow_thrust(self):
+<pre><code class="python">def efficiency_thermal(self):
     &#34;&#34;&#34;
-    Flow thrust
-
-    If the flow is choked, the expansion of the gas contributes to the thrust of the flow.
+    Stream thermal efficiency
     &#34;&#34;&#34;
-    if self.choked:
-        return self.gas.mf * (self._v_exit() - self.gas.v_0) + self._A_exit() * (
-                    self.gas.p0 - self.gas.p_0)
+    if hasattr(self, &#39;system&#39;):
+        return self._power_jet()/self._Q_in()
     else:
-        return self.gas.mf * (self._v_exit() - self.gas.v_0)</code></pre>
+        return self.power_jet()/self.Q_in()</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.stream.efficiency_total"><code class="name flex">
+<span>def <span class="ident">efficiency_total</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def efficiency_total(self):
+    if hasattr(self, &#39;system&#39;):
+        return self._power_available()/self._Q_in()
+    else:
+        return self.power_available()/self.Q_in()</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.fmf"><code class="name flex">
@@ -2525,9 +2560,7 @@ parent class in the stream (n &gt; 1):
 <span>def <span class="ident">plot_T_S</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Plot
-- Specific entropy
-- Total temperature</p></div>
+<div class="desc"><p>Temperature-Entropy stream plot.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -2538,9 +2571,7 @@ parent class in the stream (n &gt; 1):
              color=colorscheme_one()[0],
              **kwargs):
     &#34;&#34;&#34;
-    Plot
-    - Specific entropy
-    - Total temperature
+    Temperature-Entropy stream plot.
     &#34;&#34;&#34;
 
     figure((9, 5))
@@ -2563,9 +2594,7 @@ parent class in the stream (n &gt; 1):
 <span>def <span class="ident">plot_T_p</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Plot
-- Total pressure
-- Total temperature</p></div>
+<div class="desc"><p>Temperature-Pressure system plot.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -2576,9 +2605,7 @@ parent class in the stream (n &gt; 1):
              color=colorscheme_one()[0],
              **kwargs):
     &#34;&#34;&#34;
-    Plot
-    - Total pressure
-    - Total temperature
+    Temperature-Pressure system plot.
     &#34;&#34;&#34;
 
     figure((9, 5))
@@ -2669,9 +2696,7 @@ class arguments can be passed to this function.</p></div>
 <span>def <span class="ident">plot_p_H</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Plot
-- Specific entropy
-- Total temperature</p></div>
+<div class="desc"><p>Pressure-Enthalpy stream plot.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -2682,9 +2707,7 @@ class arguments can be passed to this function.</p></div>
              color=colorscheme_one()[0],
              **kwargs):
     &#34;&#34;&#34;
-    Plot
-    - Specific entropy
-    - Total temperature
+    Pressure-Enthalpy stream plot.
     &#34;&#34;&#34;
 
     figure((9, 5))
@@ -2707,9 +2730,7 @@ class arguments can be passed to this function.</p></div>
 <span>def <span class="ident">plot_p_V</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Plot
-- Total specific volume
-- Total pressure</p></div>
+<div class="desc"><p>Pressure-Volume stream plot.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -2720,9 +2741,7 @@ class arguments can be passed to this function.</p></div>
              color=colorscheme_one()[0],
              **kwargs):
     &#34;&#34;&#34;
-    Plot
-    - Total specific volume
-    - Total pressure
+    Pressure-Volume stream plot.
     &#34;&#34;&#34;
 
     figure((9, 5))
@@ -2741,41 +2760,39 @@ class arguments can be passed to this function.</p></div>
                           **further_custom)</code></pre>
 </details>
 </dd>
-<dt id="huracan.engine.stream.prop_efficiency"><code class="name flex">
-<span>def <span class="ident">prop_efficiency</span></span>(<span>self)</span>
+<dt id="huracan.engine.stream.power_available"><code class="name flex">
+<span>def <span class="ident">power_available</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Stream propulsive efficiency.</p></div>
+<div class="desc"><p>Stream available power.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def prop_efficiency(self):
+<pre><code class="python">def power_available(self):
     &#34;&#34;&#34;
-    Stream propulsive efficiency.
+    Stream available power.
     &#34;&#34;&#34;
-    return self._E_prop()/self._Q_in()</code></pre>
+    if hasattr(self, &#39;system&#39;):
+        return self._efficiency_prop()*self._power_jet()
+    else:
+        return self.efficiency_prop()*self.power_jet()</code></pre>
 </details>
 </dd>
-<dt id="huracan.engine.stream.prop_thrust"><code class="name flex">
-<span>def <span class="ident">prop_thrust</span></span>(<span>self)</span>
+<dt id="huracan.engine.stream.power_jet"><code class="name flex">
+<span>def <span class="ident">power_jet</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Propeller/propfan thrust</p></div>
+<div class="desc"><p>Stream jet power.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def prop_thrust(self):
+<pre><code class="python">def power_jet(self):
     &#34;&#34;&#34;
-    Propeller/propfan thrust
+    Stream jet power.
     &#34;&#34;&#34;
-    if any([c.__class__.__name__ in [&#39;prop&#39;, &#39;propfan&#39;] for c in self.components]):
-        propellers = [c for c in self.components if c.__class__.__name__ in [&#39;prop&#39;, &#39;propfan&#39;]]
-        prop_thrust = sum([prop.thrust(self.gas.v_0) for prop in propellers])
-    else:
-        prop_thrust = 0
-    return prop_thrust</code></pre>
+    return 1/2*(self.gas.mf*self.v_exit()**2 - (self.gas.mf - self.fmf())*self.gas.v_0**2)</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.retrieve"><code class="name flex">
@@ -2868,7 +2885,10 @@ on the instance's gas class instance.</p></div>
     &#34;&#34;&#34;
     Specific fuel consumption
     &#34;&#34;&#34;
-    return self.fmf()/self.flow_thrust()</code></pre>
+    if hasattr(self, &#39;system&#39;):
+        return self._fmf()/self._thrust_flow()
+    else:
+        return self.fmf()/self.thrust_flow()</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.stage_name"><code class="name flex">
@@ -2964,17 +2984,14 @@ and new "takeover" methods take their name.</p></div>
 
     for k in dir(self):
         v = getattr(self, k)
-        print(&#39;A&#39;)
-        print(k, type(v), isinstance(v, types.MethodType))
         # If the attribute k is:
         #    - a method
         #    - which is not special
         #    - whose name is the name of another method in the stream&#39;s sytem
         if isinstance(v, types.MethodType) and not re.match(special, k) and k in dir(self.system):
+            # Create private method
             setattr(self, &#39;_&#39; + k, v)
-
-            print(getattr(self, &#39;_&#39; + k))
-
+            # Replace public method by takeover
             setattr(self, k, takeover(self, k))</code></pre>
 </details>
 </dd>
@@ -2996,8 +3013,52 @@ and new "takeover" methods take their name.</p></div>
     return np.array([c.t0 for c in self.components])</code></pre>
 </details>
 </dd>
-<dt id="huracan.engine.stream.total_thrust"><code class="name flex">
-<span>def <span class="ident">total_thrust</span></span>(<span>self)</span>
+<dt id="huracan.engine.stream.thrust_flow"><code class="name flex">
+<span>def <span class="ident">thrust_flow</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Flow thrust</p>
+<p>If the flow is choked, the expansion of the gas contributes to the thrust of the flow.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def thrust_flow(self):
+    &#34;&#34;&#34;
+    Flow thrust
+
+    If the flow is choked, the expansion of the gas contributes to the thrust of the flow.
+    &#34;&#34;&#34;
+    if self.choked:
+        return self.gas.mf * (self.v_exit() - self.gas.v_0) + self.A_exit() * (
+                    self.gas.p0 - self.gas.p_0)
+    else:
+        return self.gas.mf * (self.v_exit() - self.gas.v_0)</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.stream.thrust_prop"><code class="name flex">
+<span>def <span class="ident">thrust_prop</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Propeller/propfan thrust</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def thrust_prop(self):
+    &#34;&#34;&#34;
+    Propeller/propfan thrust
+    &#34;&#34;&#34;
+    if any([c.__class__.__name__ in [&#39;prop&#39;, &#39;propfan&#39;] for c in self.components]):
+        propellers = [c for c in self.components if c.__class__.__name__ in [&#39;prop&#39;, &#39;propfan&#39;]]
+        thrust_prop = sum([prop.thrust(self.gas.v_0) for prop in propellers])
+    else:
+        thrust_prop = 0
+    return thrust_prop</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.stream.thrust_total"><code class="name flex">
+<span>def <span class="ident">thrust_total</span></span>(<span>self)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Flow thrust plus propeller/propfan thrust</p></div>
@@ -3005,11 +3066,11 @@ and new "takeover" methods take their name.</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def total_thrust(self):
+<pre><code class="python">def thrust_total(self):
     &#34;&#34;&#34;
     Flow thrust plus propeller/propfan thrust
     &#34;&#34;&#34;
-    return self._flow_thrust() + self._prop_thrust()</code></pre>
+    return self.thrust_flow() + self.thrust_prop()</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.v_exit"><code class="name flex">
@@ -3201,83 +3262,91 @@ exit.</p></div>
         return parents
 
     &#34;&#34;&#34;
-    Stream outlet flow characteristics
-    &#34;&#34;&#34;
-    def v_exit(self):
-        &#34;&#34;&#34;
-        Flow exit velocity
-
-        Assumptions:
-        - If the flow is not choked:
-             The thermal energy lost by the gas as it leaves the nozzle
-             is transformed into kinetic energy without losses.
-        - If the flow is choked:
-             The exit velocity is the velocity of sound before the nozzle
-             exit.
-        &#34;&#34;&#34;
-        v = [s._v_exit() for s in self.streams if s not in self.parents()]
-        return v[0] if len(v) == 1 else v
-
-    def A_exit(self):
-        &#34;&#34;&#34;
-        Nozzle exit area
-        &#34;&#34;&#34;
-        a = [s._A_exit() for s in self.streams if &#39;nozzle&#39; in [c.__class__.__name__ for c in s.components]]
-        return a[0] if len(a) == 1 else a
-
-    &#34;&#34;&#34;
-    System performance analysis
+    Fuel consumption
     &#34;&#34;&#34;
     def fmf(self):
+        &#34;&#34;&#34;
+        System fuel mass flow.
+        &#34;&#34;&#34;
         return sum([s._fmf() for s in self.streams])
 
-    def flow_thrust(self):
-        return sum([s._flow_thrust() for s in self.streams if s not in self.parents()])
+    &#34;&#34;&#34;
+    Thrust and specific fuel consumption
+    &#34;&#34;&#34;
+    def thrust_flow(self):
+        &#34;&#34;&#34;
+        System flow thrust.
+        &#34;&#34;&#34;
+        return sum([s._thrust_flow() for s in self.streams if s not in self.parents()])
 
-    def prop_thrust(self):
-        return sum([s._prop_thrust() for s in self.streams])
+    def thrust_prop(self):
+        &#34;&#34;&#34;
+        System propeller thrust
+        &#34;&#34;&#34;
+        return sum([s._thrust_prop() for s in self.streams])
 
-    def total_thrust(self):
-        return self.flow_thrust() + self.prop_thrust()
+    def thrust_total(self):
+        &#34;&#34;&#34;
+        System total thrust.
+        &#34;&#34;&#34;
+        return self.thrust_flow() + self.thrust_prop()
 
     def sfc(self):
-        return self.fmf()/self.flow_thrust()
+        &#34;&#34;&#34;
+        System specific fuel consumption.
+        &#34;&#34;&#34;
+        return self.fmf()/self.thrust_flow()
 
+    &#34;&#34;&#34;
+    Heat and work
+    &#34;&#34;&#34;
     def Q_in(self):                 # TODO: verify efficiency calculations
         &#34;&#34;&#34;
         Heat provided to the flow.
         &#34;&#34;&#34;
-        return sum([s.Q_in() for s in self.streams])
+        return sum([s._Q_in() for s in self.streams])
 
     def W_req(self):
         &#34;&#34;&#34;
         Work required from the flow.
         &#34;&#34;&#34;
-        return sum([s.W_req() for s in self.streams])
+        return sum([s._W_req() for s in self.streams])
 
-    def E_balance(self):
+    &#34;&#34;&#34;
+    Power
+    &#34;&#34;&#34;
+    def power_jet(self):
         &#34;&#34;&#34;
-        Flow energy balance.
+        Stream jet power.
         &#34;&#34;&#34;
-        return self.Q_in() - self.W_req()
+        return sum([s._power_jet() for s in self.streams if s not in self.parents()])
 
-    def E_prop(self):
+    def power_available(self):
         &#34;&#34;&#34;
-        Energy added to the flow for propulsion.
+        Stream available power.
         &#34;&#34;&#34;
-        return sum([s.E_prop() for s in self.streams])
+        return sum([s._power_available() for s in self.streams if s not in self.parents()])
 
-    def efficiency(self):
+    &#34;&#34;&#34;
+    Efficiencies
+    &#34;&#34;&#34;
+    def efficiency_prop(self):
         &#34;&#34;&#34;
-        System efficiency
+        System propulsive efficiency.
         &#34;&#34;&#34;
-        return self.E_balance()/self.Q_in()
+        return self.power_available()/self.power_jet()
 
-    def prop_efficiency(self):
+    def efficiency_thermal(self):
         &#34;&#34;&#34;
-        Stream propulsive efficiency.
+        System thermal efficiency.
         &#34;&#34;&#34;
-        return self.E_prop()/self.Q_in()
+        return self.power_jet()/self.Q_in()
+
+    def efficiency_total(self):
+        &#34;&#34;&#34;
+        System total efficiency.
+        &#34;&#34;&#34;
+        return self.power_available()/self.Q_in()
 
     &#34;&#34;&#34;
     Plots
@@ -3290,6 +3359,9 @@ exit.</p></div>
              plot_label=None,                  # When called from a _system_takeover the plot_label and color
              color=colorscheme_one()[0],       # arguments are passed to the function, but disregarded.
              **kwargs):
+        &#34;&#34;&#34;
+        General system plot.
+        &#34;&#34;&#34;
         &#34;&#34;&#34;
         System plot
         -----------
@@ -3394,6 +3466,9 @@ exit.</p></div>
                  color=colorscheme_one()[0],
                  **kwargs
                  ):
+        &#34;&#34;&#34;
+        Temperature-Pressure system plot.
+        &#34;&#34;&#34;
         args = locals()
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
@@ -3407,6 +3482,9 @@ exit.</p></div>
                  plot_label=None,
                  color=colorscheme_one()[0],
                  **kwargs):
+        &#34;&#34;&#34;
+        Pressure-Volume system plot.
+        &#34;&#34;&#34;
         args = locals()
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
@@ -3420,6 +3498,9 @@ exit.</p></div>
                  plot_label=None,
                  color=colorscheme_one()[0],
                  **kwargs):
+        &#34;&#34;&#34;
+        Temperature-Entropy system plot.
+        &#34;&#34;&#34;
         args = locals()
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
@@ -3433,6 +3514,9 @@ exit.</p></div>
                  plot_label=None,
                  color=colorscheme_one()[0],
                  **kwargs):
+        &#34;&#34;&#34;
+        Pressure-Enthalpy system plot.
+        &#34;&#34;&#34;
         args = locals()
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
@@ -3443,55 +3527,6 @@ exit.</p></div>
 </details>
 <h3>Methods</h3>
 <dl>
-<dt id="huracan.engine.system.A_exit"><code class="name flex">
-<span>def <span class="ident">A_exit</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Nozzle exit area</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def A_exit(self):
-    &#34;&#34;&#34;
-    Nozzle exit area
-    &#34;&#34;&#34;
-    a = [s._A_exit() for s in self.streams if &#39;nozzle&#39; in [c.__class__.__name__ for c in s.components]]
-    return a[0] if len(a) == 1 else a</code></pre>
-</details>
-</dd>
-<dt id="huracan.engine.system.E_balance"><code class="name flex">
-<span>def <span class="ident">E_balance</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Flow energy balance.</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def E_balance(self):
-    &#34;&#34;&#34;
-    Flow energy balance.
-    &#34;&#34;&#34;
-    return self.Q_in() - self.W_req()</code></pre>
-</details>
-</dd>
-<dt id="huracan.engine.system.E_prop"><code class="name flex">
-<span>def <span class="ident">E_prop</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Energy added to the flow for propulsion.</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def E_prop(self):
-    &#34;&#34;&#34;
-    Energy added to the flow for propulsion.
-    &#34;&#34;&#34;
-    return sum([s.E_prop() for s in self.streams])</code></pre>
-</details>
-</dd>
 <dt id="huracan.engine.system.Q_in"><code class="name flex">
 <span>def <span class="ident">Q_in</span></span>(<span>self)</span>
 </code></dt>
@@ -3505,7 +3540,7 @@ exit.</p></div>
     &#34;&#34;&#34;
     Heat provided to the flow.
     &#34;&#34;&#34;
-    return sum([s.Q_in() for s in self.streams])</code></pre>
+    return sum([s._Q_in() for s in self.streams])</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.system.W_req"><code class="name flex">
@@ -3521,48 +3556,70 @@ exit.</p></div>
     &#34;&#34;&#34;
     Work required from the flow.
     &#34;&#34;&#34;
-    return sum([s.W_req() for s in self.streams])</code></pre>
+    return sum([s._W_req() for s in self.streams])</code></pre>
 </details>
 </dd>
-<dt id="huracan.engine.system.efficiency"><code class="name flex">
-<span>def <span class="ident">efficiency</span></span>(<span>self)</span>
+<dt id="huracan.engine.system.efficiency_prop"><code class="name flex">
+<span>def <span class="ident">efficiency_prop</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>System efficiency</p></div>
+<div class="desc"><p>System propulsive efficiency.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def efficiency(self):
+<pre><code class="python">def efficiency_prop(self):
     &#34;&#34;&#34;
-    System efficiency
+    System propulsive efficiency.
     &#34;&#34;&#34;
-    return self.E_balance()/self.Q_in()</code></pre>
+    return self.power_available()/self.power_jet()</code></pre>
 </details>
 </dd>
-<dt id="huracan.engine.system.flow_thrust"><code class="name flex">
-<span>def <span class="ident">flow_thrust</span></span>(<span>self)</span>
+<dt id="huracan.engine.system.efficiency_thermal"><code class="name flex">
+<span>def <span class="ident">efficiency_thermal</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>System thermal efficiency.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def flow_thrust(self):
-    return sum([s._flow_thrust() for s in self.streams if s not in self.parents()])</code></pre>
+<pre><code class="python">def efficiency_thermal(self):
+    &#34;&#34;&#34;
+    System thermal efficiency.
+    &#34;&#34;&#34;
+    return self.power_jet()/self.Q_in()</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.system.efficiency_total"><code class="name flex">
+<span>def <span class="ident">efficiency_total</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>System total efficiency.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def efficiency_total(self):
+    &#34;&#34;&#34;
+    System total efficiency.
+    &#34;&#34;&#34;
+    return self.power_available()/self.Q_in()</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.system.fmf"><code class="name flex">
 <span>def <span class="ident">fmf</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>System fuel mass flow.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def fmf(self):
+    &#34;&#34;&#34;
+    System fuel mass flow.
+    &#34;&#34;&#34;
     return sum([s._fmf() for s in self.streams])</code></pre>
 </details>
 </dd>
@@ -3614,28 +3671,7 @@ flowing to children streams.</p></div>
 <span>def <span class="ident">plot</span></span>(<span>self, x, y, x_scale=None, y_scale=None, x_label=None, y_label=None, show=False, plot_label=None, color='darkred', **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"><h2 id="system-plot">System Plot</h2>
-<p>x and y are the stream parameters to be
-plotted for each stream.</p>
-<p>Process
-1. Create figure
-2. Create state variable and plotters vectors
-2.1 Parent connectors
-3. comparison call</p>
-<p>comparison call
-- fig=None, ax=None -&gt; plot_cycle_graph -&gt; fig in **kwargs keys
-- fig=None, ax=None -&gt; line, scatter
-- line, scatter plot onto active figure, axis</p>
-<p>:param x_scale: Scaling factor.
-:param y_scale: Scaling factor.</p>
-<p>:type x:
-str
-:type y:
-str
-:type x_scale:
-float
-:type y_scale:
-float</p></div>
+<div class="desc"><p>General system plot.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -3648,6 +3684,9 @@ float</p></div>
          plot_label=None,                  # When called from a _system_takeover the plot_label and color
          color=colorscheme_one()[0],       # arguments are passed to the function, but disregarded.
          **kwargs):
+    &#34;&#34;&#34;
+    General system plot.
+    &#34;&#34;&#34;
     &#34;&#34;&#34;
     System plot
     -----------
@@ -3751,7 +3790,7 @@ float</p></div>
 <span>def <span class="ident">plot_T_S</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Temperature-Entropy system plot.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -3761,6 +3800,9 @@ float</p></div>
              plot_label=None,
              color=colorscheme_one()[0],
              **kwargs):
+    &#34;&#34;&#34;
+    Temperature-Entropy system plot.
+    &#34;&#34;&#34;
     args = locals()
     args.pop(&#39;self&#39;, None)
     args.pop(&#39;kwargs&#39;, None)
@@ -3774,7 +3816,7 @@ float</p></div>
 <span>def <span class="ident">plot_T_p</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Temperature-Pressure system plot.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -3785,6 +3827,9 @@ float</p></div>
              color=colorscheme_one()[0],
              **kwargs
              ):
+    &#34;&#34;&#34;
+    Temperature-Pressure system plot.
+    &#34;&#34;&#34;
     args = locals()
     args.pop(&#39;self&#39;, None)
     args.pop(&#39;kwargs&#39;, None)
@@ -3798,7 +3843,7 @@ float</p></div>
 <span>def <span class="ident">plot_p_H</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Pressure-Enthalpy system plot.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -3808,6 +3853,9 @@ float</p></div>
              plot_label=None,
              color=colorscheme_one()[0],
              **kwargs):
+    &#34;&#34;&#34;
+    Pressure-Enthalpy system plot.
+    &#34;&#34;&#34;
     args = locals()
     args.pop(&#39;self&#39;, None)
     args.pop(&#39;kwargs&#39;, None)
@@ -3821,7 +3869,7 @@ float</p></div>
 <span>def <span class="ident">plot_p_V</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Pressure-Volume system plot.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -3831,6 +3879,9 @@ float</p></div>
              plot_label=None,
              color=colorscheme_one()[0],
              **kwargs):
+    &#34;&#34;&#34;
+    Pressure-Volume system plot.
+    &#34;&#34;&#34;
     args = locals()
     args.pop(&#39;self&#39;, None)
     args.pop(&#39;kwargs&#39;, None)
@@ -3840,33 +3891,36 @@ float</p></div>
               **{**args, **kwargs})</code></pre>
 </details>
 </dd>
-<dt id="huracan.engine.system.prop_efficiency"><code class="name flex">
-<span>def <span class="ident">prop_efficiency</span></span>(<span>self)</span>
+<dt id="huracan.engine.system.power_available"><code class="name flex">
+<span>def <span class="ident">power_available</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Stream propulsive efficiency.</p></div>
+<div class="desc"><p>Stream available power.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def prop_efficiency(self):
+<pre><code class="python">def power_available(self):
     &#34;&#34;&#34;
-    Stream propulsive efficiency.
+    Stream available power.
     &#34;&#34;&#34;
-    return self.E_prop()/self.Q_in()</code></pre>
+    return sum([s._power_available() for s in self.streams if s not in self.parents()])</code></pre>
 </details>
 </dd>
-<dt id="huracan.engine.system.prop_thrust"><code class="name flex">
-<span>def <span class="ident">prop_thrust</span></span>(<span>self)</span>
+<dt id="huracan.engine.system.power_jet"><code class="name flex">
+<span>def <span class="ident">power_jet</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Stream jet power.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def prop_thrust(self):
-    return sum([s._prop_thrust() for s in self.streams])</code></pre>
+<pre><code class="python">def power_jet(self):
+    &#34;&#34;&#34;
+    Stream jet power.
+    &#34;&#34;&#34;
+    return sum([s._power_jet() for s in self.streams if s not in self.parents()])</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.system.retrieve"><code class="name flex">
@@ -3924,13 +3978,16 @@ float</p></div>
 <span>def <span class="ident">sfc</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>System specific fuel consumption.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def sfc(self):
-    return self.fmf()/self.flow_thrust()</code></pre>
+    &#34;&#34;&#34;
+    System specific fuel consumption.
+    &#34;&#34;&#34;
+    return self.fmf()/self.thrust_flow()</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.system.sort_streams"><code class="name flex">
@@ -3951,49 +4008,52 @@ float</p></div>
     self.streams = [s for _, s in sorted(zip(indexes, self.streams))]</code></pre>
 </details>
 </dd>
-<dt id="huracan.engine.system.total_thrust"><code class="name flex">
-<span>def <span class="ident">total_thrust</span></span>(<span>self)</span>
+<dt id="huracan.engine.system.thrust_flow"><code class="name flex">
+<span>def <span class="ident">thrust_flow</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>System flow thrust.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def total_thrust(self):
-    return self.flow_thrust() + self.prop_thrust()</code></pre>
+<pre><code class="python">def thrust_flow(self):
+    &#34;&#34;&#34;
+    System flow thrust.
+    &#34;&#34;&#34;
+    return sum([s._thrust_flow() for s in self.streams if s not in self.parents()])</code></pre>
 </details>
 </dd>
-<dt id="huracan.engine.system.v_exit"><code class="name flex">
-<span>def <span class="ident">v_exit</span></span>(<span>self)</span>
+<dt id="huracan.engine.system.thrust_prop"><code class="name flex">
+<span>def <span class="ident">thrust_prop</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Flow exit velocity</p>
-<p>Assumptions:
-- If the flow is not choked:
-The thermal energy lost by the gas as it leaves the nozzle
-is transformed into kinetic energy without losses.
-- If the flow is choked:
-The exit velocity is the velocity of sound before the nozzle
-exit.</p></div>
+<div class="desc"><p>System propeller thrust</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def v_exit(self):
+<pre><code class="python">def thrust_prop(self):
     &#34;&#34;&#34;
-    Flow exit velocity
-
-    Assumptions:
-    - If the flow is not choked:
-         The thermal energy lost by the gas as it leaves the nozzle
-         is transformed into kinetic energy without losses.
-    - If the flow is choked:
-         The exit velocity is the velocity of sound before the nozzle
-         exit.
+    System propeller thrust
     &#34;&#34;&#34;
-    v = [s._v_exit() for s in self.streams if s not in self.parents()]
-    return v[0] if len(v) == 1 else v</code></pre>
+    return sum([s._thrust_prop() for s in self.streams])</code></pre>
+</details>
+</dd>
+<dt id="huracan.engine.system.thrust_total"><code class="name flex">
+<span>def <span class="ident">thrust_total</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>System total thrust.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def thrust_total(self):
+    &#34;&#34;&#34;
+    System total thrust.
+    &#34;&#34;&#34;
+    return self.thrust_flow() + self.thrust_prop()</code></pre>
 </details>
 </dd>
 </dl>
@@ -4031,8 +4091,6 @@ exit.</p></div>
 <h4><code><a title="huracan.engine.stream" href="#huracan.engine.stream">stream</a></code></h4>
 <ul class="two-column">
 <li><code><a title="huracan.engine.stream.A_exit" href="#huracan.engine.stream.A_exit">A_exit</a></code></li>
-<li><code><a title="huracan.engine.stream.E_balance" href="#huracan.engine.stream.E_balance">E_balance</a></code></li>
-<li><code><a title="huracan.engine.stream.E_prop" href="#huracan.engine.stream.E_prop">E_prop</a></code></li>
 <li><code><a title="huracan.engine.stream.H" href="#huracan.engine.stream.H">H</a></code></li>
 <li><code><a title="huracan.engine.stream.Q_in" href="#huracan.engine.stream.Q_in">Q_in</a></code></li>
 <li><code><a title="huracan.engine.stream.S" href="#huracan.engine.stream.S">S</a></code></li>
@@ -4041,8 +4099,9 @@ exit.</p></div>
 <li><code><a title="huracan.engine.stream.add_component" href="#huracan.engine.stream.add_component">add_component</a></code></li>
 <li><code><a title="huracan.engine.stream.add_stream" href="#huracan.engine.stream.add_stream">add_stream</a></code></li>
 <li><code><a title="huracan.engine.stream.divert" href="#huracan.engine.stream.divert">divert</a></code></li>
-<li><code><a title="huracan.engine.stream.efficiency" href="#huracan.engine.stream.efficiency">efficiency</a></code></li>
-<li><code><a title="huracan.engine.stream.flow_thrust" href="#huracan.engine.stream.flow_thrust">flow_thrust</a></code></li>
+<li><code><a title="huracan.engine.stream.efficiency_prop" href="#huracan.engine.stream.efficiency_prop">efficiency_prop</a></code></li>
+<li><code><a title="huracan.engine.stream.efficiency_thermal" href="#huracan.engine.stream.efficiency_thermal">efficiency_thermal</a></code></li>
+<li><code><a title="huracan.engine.stream.efficiency_total" href="#huracan.engine.stream.efficiency_total">efficiency_total</a></code></li>
 <li><code><a title="huracan.engine.stream.fmf" href="#huracan.engine.stream.fmf">fmf</a></code></li>
 <li><code><a title="huracan.engine.stream.fr" href="#huracan.engine.stream.fr">fr</a></code></li>
 <li><code><a title="huracan.engine.stream.log" href="#huracan.engine.stream.log">log</a></code></li>
@@ -4054,8 +4113,8 @@ exit.</p></div>
 <li><code><a title="huracan.engine.stream.plot_cycle_graph" href="#huracan.engine.stream.plot_cycle_graph">plot_cycle_graph</a></code></li>
 <li><code><a title="huracan.engine.stream.plot_p_H" href="#huracan.engine.stream.plot_p_H">plot_p_H</a></code></li>
 <li><code><a title="huracan.engine.stream.plot_p_V" href="#huracan.engine.stream.plot_p_V">plot_p_V</a></code></li>
-<li><code><a title="huracan.engine.stream.prop_efficiency" href="#huracan.engine.stream.prop_efficiency">prop_efficiency</a></code></li>
-<li><code><a title="huracan.engine.stream.prop_thrust" href="#huracan.engine.stream.prop_thrust">prop_thrust</a></code></li>
+<li><code><a title="huracan.engine.stream.power_available" href="#huracan.engine.stream.power_available">power_available</a></code></li>
+<li><code><a title="huracan.engine.stream.power_jet" href="#huracan.engine.stream.power_jet">power_jet</a></code></li>
 <li><code><a title="huracan.engine.stream.retrieve" href="#huracan.engine.stream.retrieve">retrieve</a></code></li>
 <li><code><a title="huracan.engine.stream.run" href="#huracan.engine.stream.run">run</a></code></li>
 <li><code><a title="huracan.engine.stream.runtime" href="#huracan.engine.stream.runtime">runtime</a></code></li>
@@ -4064,20 +4123,20 @@ exit.</p></div>
 <li><code><a title="huracan.engine.stream.stages" href="#huracan.engine.stream.stages">stages</a></code></li>
 <li><code><a title="huracan.engine.stream.system_takeover" href="#huracan.engine.stream.system_takeover">system_takeover</a></code></li>
 <li><code><a title="huracan.engine.stream.t0" href="#huracan.engine.stream.t0">t0</a></code></li>
-<li><code><a title="huracan.engine.stream.total_thrust" href="#huracan.engine.stream.total_thrust">total_thrust</a></code></li>
+<li><code><a title="huracan.engine.stream.thrust_flow" href="#huracan.engine.stream.thrust_flow">thrust_flow</a></code></li>
+<li><code><a title="huracan.engine.stream.thrust_prop" href="#huracan.engine.stream.thrust_prop">thrust_prop</a></code></li>
+<li><code><a title="huracan.engine.stream.thrust_total" href="#huracan.engine.stream.thrust_total">thrust_total</a></code></li>
 <li><code><a title="huracan.engine.stream.v_exit" href="#huracan.engine.stream.v_exit">v_exit</a></code></li>
 </ul>
 </li>
 <li>
 <h4><code><a title="huracan.engine.system" href="#huracan.engine.system">system</a></code></h4>
 <ul class="two-column">
-<li><code><a title="huracan.engine.system.A_exit" href="#huracan.engine.system.A_exit">A_exit</a></code></li>
-<li><code><a title="huracan.engine.system.E_balance" href="#huracan.engine.system.E_balance">E_balance</a></code></li>
-<li><code><a title="huracan.engine.system.E_prop" href="#huracan.engine.system.E_prop">E_prop</a></code></li>
 <li><code><a title="huracan.engine.system.Q_in" href="#huracan.engine.system.Q_in">Q_in</a></code></li>
 <li><code><a title="huracan.engine.system.W_req" href="#huracan.engine.system.W_req">W_req</a></code></li>
-<li><code><a title="huracan.engine.system.efficiency" href="#huracan.engine.system.efficiency">efficiency</a></code></li>
-<li><code><a title="huracan.engine.system.flow_thrust" href="#huracan.engine.system.flow_thrust">flow_thrust</a></code></li>
+<li><code><a title="huracan.engine.system.efficiency_prop" href="#huracan.engine.system.efficiency_prop">efficiency_prop</a></code></li>
+<li><code><a title="huracan.engine.system.efficiency_thermal" href="#huracan.engine.system.efficiency_thermal">efficiency_thermal</a></code></li>
+<li><code><a title="huracan.engine.system.efficiency_total" href="#huracan.engine.system.efficiency_total">efficiency_total</a></code></li>
 <li><code><a title="huracan.engine.system.fmf" href="#huracan.engine.system.fmf">fmf</a></code></li>
 <li><code><a title="huracan.engine.system.gobble" href="#huracan.engine.system.gobble">gobble</a></code></li>
 <li><code><a title="huracan.engine.system.parents" href="#huracan.engine.system.parents">parents</a></code></li>
@@ -4086,14 +4145,15 @@ exit.</p></div>
 <li><code><a title="huracan.engine.system.plot_T_p" href="#huracan.engine.system.plot_T_p">plot_T_p</a></code></li>
 <li><code><a title="huracan.engine.system.plot_p_H" href="#huracan.engine.system.plot_p_H">plot_p_H</a></code></li>
 <li><code><a title="huracan.engine.system.plot_p_V" href="#huracan.engine.system.plot_p_V">plot_p_V</a></code></li>
-<li><code><a title="huracan.engine.system.prop_efficiency" href="#huracan.engine.system.prop_efficiency">prop_efficiency</a></code></li>
-<li><code><a title="huracan.engine.system.prop_thrust" href="#huracan.engine.system.prop_thrust">prop_thrust</a></code></li>
+<li><code><a title="huracan.engine.system.power_available" href="#huracan.engine.system.power_available">power_available</a></code></li>
+<li><code><a title="huracan.engine.system.power_jet" href="#huracan.engine.system.power_jet">power_jet</a></code></li>
 <li><code><a title="huracan.engine.system.retrieve" href="#huracan.engine.system.retrieve">retrieve</a></code></li>
 <li><code><a title="huracan.engine.system.run" href="#huracan.engine.system.run">run</a></code></li>
 <li><code><a title="huracan.engine.system.sfc" href="#huracan.engine.system.sfc">sfc</a></code></li>
 <li><code><a title="huracan.engine.system.sort_streams" href="#huracan.engine.system.sort_streams">sort_streams</a></code></li>
-<li><code><a title="huracan.engine.system.total_thrust" href="#huracan.engine.system.total_thrust">total_thrust</a></code></li>
-<li><code><a title="huracan.engine.system.v_exit" href="#huracan.engine.system.v_exit">v_exit</a></code></li>
+<li><code><a title="huracan.engine.system.thrust_flow" href="#huracan.engine.system.thrust_flow">thrust_flow</a></code></li>
+<li><code><a title="huracan.engine.system.thrust_prop" href="#huracan.engine.system.thrust_prop">thrust_prop</a></code></li>
+<li><code><a title="huracan.engine.system.thrust_total" href="#huracan.engine.system.thrust_total">thrust_total</a></code></li>
 </ul>
 </li>
 </ul>
