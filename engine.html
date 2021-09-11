@@ -676,7 +676,7 @@ class stream:
         &#34;&#34;&#34;
         Stream propulsive efficiency.
         &#34;&#34;&#34;
-        return 2/(1+self.v_exit()/self.gas.v_0)
+        return 2/(1+self.v_exit()/self.gas.v_0) if self.gas.v_0 &gt; 0 else 0
 
     def efficiency_total(self):
         if hasattr(self, &#39;system&#39;):
@@ -1985,7 +1985,7 @@ float
         &#34;&#34;&#34;
         Stream propulsive efficiency.
         &#34;&#34;&#34;
-        return 2/(1+self.v_exit()/self.gas.v_0)
+        return 2/(1+self.v_exit()/self.gas.v_0) if self.gas.v_0 &gt; 0 else 0
 
     def efficiency_total(self):
         if hasattr(self, &#39;system&#39;):
@@ -2375,7 +2375,7 @@ float
     &#34;&#34;&#34;
     Stream propulsive efficiency.
     &#34;&#34;&#34;
-    return 2/(1+self.v_exit()/self.gas.v_0)</code></pre>
+    return 2/(1+self.v_exit()/self.gas.v_0) if self.gas.v_0 &gt; 0 else 0</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.efficiency_thermal"><code class="name flex">
