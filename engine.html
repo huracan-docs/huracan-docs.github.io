@@ -79,7 +79,40 @@ class component:
             setattr(self, sv, getattr(gas, sv))
 
 
-class set:
+class constructor_set(type):
+    &#34;&#34;&#34;
+    Set metaclass
+    -------------
+
+    Ensure all necessary methods are implemented in child classes.
+    &#34;&#34;&#34;
+    def __new__(cls, name, bases, body):
+
+        for i in [&#39;add_component&#39;, &#39;add_set&#39;]:
+            if name != cls.__name__.split(&#39;_&#39;)[1] and i not in body:
+                raise TypeError(f&#39;SET class build error: {i} method must be implemented in SET child classes.&#39;)
+
+        return super().__new__(cls, name, bases, body)
+
+
+class constructor_superset(type):
+    &#34;&#34;&#34;
+    Superset metaclass
+    ------------------
+
+    Ensure all necessary methods are implemented in child classes.
+    &#34;&#34;&#34;
+    def __new__(cls, name, bases, body):
+
+        for i in [&#39;gobble&#39;]:
+            if name != cls.__name__.split(&#39;_&#39;)[1] and i not in body:
+                if i not in body:
+                    raise TypeError(f&#39;SUPERSET class build error: {i} method must be implemented in SUPERSET child classes.&#39;)
+
+        return super().__new__(cls, name, bases, body)
+
+
+class set(metaclass=constructor_set):
     &#34;&#34;&#34;
     Component set class
     &#34;&#34;&#34;
@@ -129,7 +162,7 @@ class set:
                 setattr(self, k, takeover(self, k))
 
 
-class superset:
+class superset(metaclass=constructor_superset):
     &#34;&#34;&#34;
     Component superset class
     &#34;&#34;&#34;
@@ -865,7 +898,7 @@ class stream(set):
                 **further_custom)
 
 
-class system:
+class system(superset):
     &#34;&#34;&#34;
     System
     ------
@@ -1285,6 +1318,69 @@ class system:
 <li><a title="huracan.components.static.nozzle" href="components/static.html#huracan.components.static.nozzle">nozzle</a></li>
 </ul>
 </dd>
+<dt id="huracan.engine.constructor_set"><code class="flex name class">
+<span>class <span class="ident">constructor_set</span></span>
+<span>(</span><span>*args, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><h2 id="set-metaclass">Set Metaclass</h2>
+<p>Ensure all necessary methods are implemented in child classes.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class constructor_set(type):
+    &#34;&#34;&#34;
+    Set metaclass
+    -------------
+
+    Ensure all necessary methods are implemented in child classes.
+    &#34;&#34;&#34;
+    def __new__(cls, name, bases, body):
+
+        for i in [&#39;add_component&#39;, &#39;add_set&#39;]:
+            if name != cls.__name__.split(&#39;_&#39;)[1] and i not in body:
+                raise TypeError(f&#39;SET class build error: {i} method must be implemented in SET child classes.&#39;)
+
+        return super().__new__(cls, name, bases, body)</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>builtins.type</li>
+</ul>
+</dd>
+<dt id="huracan.engine.constructor_superset"><code class="flex name class">
+<span>class <span class="ident">constructor_superset</span></span>
+<span>(</span><span>*args, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><h2 id="superset-metaclass">Superset Metaclass</h2>
+<p>Ensure all necessary methods are implemented in child classes.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class constructor_superset(type):
+    &#34;&#34;&#34;
+    Superset metaclass
+    ------------------
+
+    Ensure all necessary methods are implemented in child classes.
+    &#34;&#34;&#34;
+    def __new__(cls, name, bases, body):
+
+        for i in [&#39;gobble&#39;]:
+            if name != cls.__name__.split(&#39;_&#39;)[1] and i not in body:
+                if i not in body:
+                    raise TypeError(f&#39;SUPERSET class build error: {i} method must be implemented in SUPERSET child classes.&#39;)
+
+        return super().__new__(cls, name, bases, body)</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>builtins.type</li>
+</ul>
+</dd>
 <dt id="huracan.engine.set"><code class="flex name class">
 <span>class <span class="ident">set</span></span>
 </code></dt>
@@ -1294,7 +1390,7 @@ class system:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">class set:
+<pre><code class="python">class set(metaclass=constructor_set):
     &#34;&#34;&#34;
     Component set class
     &#34;&#34;&#34;
@@ -3215,7 +3311,7 @@ exit.</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">class superset:
+<pre><code class="python">class superset(metaclass=constructor_superset):
     &#34;&#34;&#34;
     Component superset class
     &#34;&#34;&#34;
@@ -3230,6 +3326,10 @@ exit.</p></div>
         &#34;&#34;&#34;
         self.gobble(list(args))</code></pre>
 </details>
+<h3>Subclasses</h3>
+<ul class="hlist">
+<li><a title="huracan.engine.system" href="#huracan.engine.system">system</a></li>
+</ul>
 </dd>
 <dt id="huracan.engine.system"><code class="flex name class">
 <span>class <span class="ident">system</span></span>
@@ -3243,7 +3343,7 @@ exit.</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">class system:
+<pre><code class="python">class system(superset):
     &#34;&#34;&#34;
     System
     ------
@@ -3607,6 +3707,10 @@ exit.</p></div>
                   y=&#39;H&#39;,  y_label=&#39;H$_0$ [kJ]&#39;,
                   **{**args, **kwargs})</code></pre>
 </details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="huracan.engine.superset" href="#huracan.engine.superset">superset</a></li>
+</ul>
 <h3>Methods</h3>
 <dl>
 <dt id="huracan.engine.system.Q_in"><code class="name flex">
@@ -4163,6 +4267,12 @@ flowing to children streams.</p></div>
 <ul>
 <li>
 <h4><code><a title="huracan.engine.component" href="#huracan.engine.component">component</a></code></h4>
+</li>
+<li>
+<h4><code><a title="huracan.engine.constructor_set" href="#huracan.engine.constructor_set">constructor_set</a></code></h4>
+</li>
+<li>
+<h4><code><a title="huracan.engine.constructor_superset" href="#huracan.engine.constructor_superset">constructor_superset</a></code></h4>
 </li>
 <li>
 <h4><code><a title="huracan.engine.set" href="#huracan.engine.set">set</a></code></h4>
