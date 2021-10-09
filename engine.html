@@ -329,9 +329,7 @@ class stream(SET):
         merged.stream_id[0] = n + 1
 
         if hasattr(self, &#39;system&#39;) and hasattr(s, &#39;system&#39;):
-            print(self._run, &#39;\n&#39;, self.run, &#39;\n&#39;)
             self.superset = self.system = s.system = merged.system = self.system + s.system
-            print(self._run, &#39;\n&#39;, self.run, &#39;\n&#39;)
             self.system(merged)
         elif hasattr(self, &#39;system&#39;):
             self.system(s, merged)
@@ -1801,9 +1799,7 @@ float
         merged.stream_id[0] = n + 1
 
         if hasattr(self, &#39;system&#39;) and hasattr(s, &#39;system&#39;):
-            print(self._run, &#39;\n&#39;, self.run, &#39;\n&#39;)
             self.superset = self.system = s.system = merged.system = self.system + s.system
-            print(self._run, &#39;\n&#39;, self.run, &#39;\n&#39;)
             self.system(merged)
         elif hasattr(self, &#39;system&#39;):
             self.system(s, merged)
@@ -2532,9 +2528,7 @@ float
     merged.stream_id[0] = n + 1
 
     if hasattr(self, &#39;system&#39;) and hasattr(s, &#39;system&#39;):
-        print(self._run, &#39;\n&#39;, self.run, &#39;\n&#39;)
         self.superset = self.system = s.system = merged.system = self.system + s.system
-        print(self._run, &#39;\n&#39;, self.run, &#39;\n&#39;)
         self.system(merged)
     elif hasattr(self, &#39;system&#39;):
         self.system(s, merged)
