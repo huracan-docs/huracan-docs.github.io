@@ -79,40 +79,40 @@ class component:
             setattr(self, sv, getattr(gas, sv))
 
 
-class constructor_set(type):
+class constructor_SET(type):
     &#34;&#34;&#34;
     Set metaclass
     -------------
 
     Ensure all necessary methods are implemented in child classes.
     &#34;&#34;&#34;
-    def __new__(cls, name, bases, body):
+    def __new__(mcs, name, bases, body):
 
         for i in [&#39;add_component&#39;, &#39;add_set&#39;]:
-            if name != cls.__name__.split(&#39;_&#39;)[1] and i not in body:
+            if name != mcs.__name__.split(&#39;_&#39;)[1] and i not in body:
                 raise TypeError(f&#39;SET class build error: {i} method must be implemented in SET child classes.&#39;)
 
-        return super().__new__(cls, name, bases, body)
+        return super().__new__(mcs, name, bases, body)
 
 
-class constructor_superset(type):
+class constructor_SUPERSET(type):
     &#34;&#34;&#34;
     Superset metaclass
     ------------------
 
     Ensure all necessary methods are implemented in child classes.
     &#34;&#34;&#34;
-    def __new__(cls, name, bases, body):
+    def __new__(mcs, name, bases, body):
 
         for i in [&#39;gobble&#39;]:
-            if name != cls.__name__.split(&#39;_&#39;)[1] and i not in body:
+            if name != mcs.__name__.split(&#39;_&#39;)[1] and i not in body:
                 if i not in body:
                     raise TypeError(f&#39;SUPERSET class build error: {i} method must be implemented in SUPERSET child classes.&#39;)
 
-        return super().__new__(cls, name, bases, body)
+        return super().__new__(mcs, name, bases, body)
 
 
-class set(metaclass=constructor_set):
+class SET(metaclass=constructor_SET):
     &#34;&#34;&#34;
     Component set class
     &#34;&#34;&#34;
@@ -123,7 +123,7 @@ class set(metaclass=constructor_set):
         if isinstance(other, component):
             self.add_component(other)
             return self
-        if isinstance(other, set):
+        if isinstance(other, SET):
             return self.add_set(other)
 
     &#34;&#34;&#34;
@@ -154,15 +154,16 @@ class set(metaclass=constructor_set):
             # If the attribute k is:
             #    - a method
             #    - which is not special
-            #    - whose name is the name of another method in the stream&#39;s sytem
+            #    - whose name is the name of another method in the stream&#39;s system
             if isinstance(v, types.MethodType) and not re.match(special, k) and k in dir(self.superset):
-                # Create private method
-                setattr(self, &#39;_&#39; + k, v)
+                if not hasattr(self, &#39;_&#39; + k):
+                    # Create private method
+                    setattr(self, &#39;_&#39; + k, v)
                 # Replace public method by takeover
                 setattr(self, k, takeover(self, k))
 
 
-class superset(metaclass=constructor_superset):
+class SUPERSET(metaclass=constructor_SUPERSET):
     &#34;&#34;&#34;
     Component superset class
     &#34;&#34;&#34;
@@ -236,7 +237,7 @@ class shaft:
         return w_r_m + w_r_e
 
 
-class stream(set):
+class stream(SET):
     &#34;&#34;&#34;
     Stream
     ------
@@ -322,13 +323,15 @@ class stream(set):
                                                            &#39;the stream merge operation to be possible.&#39;
 
         n = max(self.stream_id[0], s.stream_id[0])  # Get largest stream_id
-        self.stream_id[0] = s.stream_id[0] = n  # Set largest stream_id for both merging streams
+        self.stream_id[0] = s.stream_id[0] = n      # Set largest stream_id for both merging streams
 
         merged = stream(parents=[self, s])
         merged.stream_id[0] = n + 1
 
         if hasattr(self, &#39;system&#39;) and hasattr(s, &#39;system&#39;):
+            print(self._run, &#39;\n&#39;, self.run, &#39;\n&#39;)
             self.superset = self.system = s.system = merged.system = self.system + s.system
+            print(self._run, &#39;\n&#39;, self.run, &#39;\n&#39;)
             self.system(merged)
         elif hasattr(self, &#39;system&#39;):
             self.system(s, merged)
@@ -898,7 +901,7 @@ class stream(set):
                 **further_custom)
 
 
-class system(superset):
+class system(SUPERSET):
     &#34;&#34;&#34;
     System
     ------
@@ -1272,6 +1275,150 @@ class system(superset):
 <section>
 <h2 class="section-title" id="header-classes">Classes</h2>
 <dl>
+<dt id="huracan.engine.SET"><code class="flex name class">
+<span>class <span class="ident">SET</span></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Component set class</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class SET(metaclass=constructor_SET):
+    &#34;&#34;&#34;
+    Component set class
+    &#34;&#34;&#34;
+    def __sub__(self, other):
+        &#34;&#34;&#34;
+        Set concatenation operator: &lt;set&gt; - &lt;component/set&gt;
+        &#34;&#34;&#34;
+        if isinstance(other, component):
+            self.add_component(other)
+            return self
+        if isinstance(other, SET):
+            return self.add_set(other)
+
+    &#34;&#34;&#34;
+    Superset takeover
+    &#34;&#34;&#34;
+    def superset_takeover(self):
+        &#34;&#34;&#34;
+        Superset takeover
+        ---------------
+
+        When a set (a stream) is integrated in a superset
+        (a system), all set methods with a homonimous
+        superset method are renamed as protected
+        instance attributes, and their original names are
+        taken by pointers to the homonimous superset methods.
+        &#34;&#34;&#34;
+
+        special = r&#39;^__(.*?)\__$&#39;
+
+        def takeover(obj, method):
+            if hasattr(obj.superset, method):
+                return getattr(obj.superset, method)
+            else:
+                return getattr(obj, &#39;_&#39; + method)
+
+        for k in dir(self):
+            v = getattr(self, k)
+            # If the attribute k is:
+            #    - a method
+            #    - which is not special
+            #    - whose name is the name of another method in the stream&#39;s system
+            if isinstance(v, types.MethodType) and not re.match(special, k) and k in dir(self.superset):
+                if not hasattr(self, &#39;_&#39; + k):
+                    # Create private method
+                    setattr(self, &#39;_&#39; + k, v)
+                # Replace public method by takeover
+                setattr(self, k, takeover(self, k))</code></pre>
+</details>
+<h3>Subclasses</h3>
+<ul class="hlist">
+<li><a title="huracan.engine.stream" href="#huracan.engine.stream">stream</a></li>
+</ul>
+<h3>Methods</h3>
+<dl>
+<dt id="huracan.engine.SET.superset_takeover"><code class="name flex">
+<span>def <span class="ident">superset_takeover</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><h2 id="superset-takeover">Superset Takeover</h2>
+<p>When a set (a stream) is integrated in a superset
+(a system), all set methods with a homonimous
+superset method are renamed as protected
+instance attributes, and their original names are
+taken by pointers to the homonimous superset methods.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def superset_takeover(self):
+    &#34;&#34;&#34;
+    Superset takeover
+    ---------------
+
+    When a set (a stream) is integrated in a superset
+    (a system), all set methods with a homonimous
+    superset method are renamed as protected
+    instance attributes, and their original names are
+    taken by pointers to the homonimous superset methods.
+    &#34;&#34;&#34;
+
+    special = r&#39;^__(.*?)\__$&#39;
+
+    def takeover(obj, method):
+        if hasattr(obj.superset, method):
+            return getattr(obj.superset, method)
+        else:
+            return getattr(obj, &#39;_&#39; + method)
+
+    for k in dir(self):
+        v = getattr(self, k)
+        # If the attribute k is:
+        #    - a method
+        #    - which is not special
+        #    - whose name is the name of another method in the stream&#39;s system
+        if isinstance(v, types.MethodType) and not re.match(special, k) and k in dir(self.superset):
+            if not hasattr(self, &#39;_&#39; + k):
+                # Create private method
+                setattr(self, &#39;_&#39; + k, v)
+            # Replace public method by takeover
+            setattr(self, k, takeover(self, k))</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+<dt id="huracan.engine.SUPERSET"><code class="flex name class">
+<span>class <span class="ident">SUPERSET</span></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Component superset class</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class SUPERSET(metaclass=constructor_SUPERSET):
+    &#34;&#34;&#34;
+    Component superset class
+    &#34;&#34;&#34;
+    def __call__(self, *args):
+        &#34;&#34;&#34;
+        Superset set addition operator: &lt;superset&gt;(&lt;list of sets&gt;)
+
+        The gobble function must be implemented by the superset
+        child class (system).
+
+        :type args: set
+        &#34;&#34;&#34;
+        self.gobble(list(args))</code></pre>
+</details>
+<h3>Subclasses</h3>
+<ul class="hlist">
+<li><a title="huracan.engine.system" href="#huracan.engine.system">system</a></li>
+</ul>
+</dd>
 <dt id="huracan.engine.component"><code class="flex name class">
 <span>class <span class="ident">component</span></span>
 </code></dt>
@@ -1318,8 +1465,8 @@ class system(superset):
 <li><a title="huracan.components.static.nozzle" href="components/static.html#huracan.components.static.nozzle">nozzle</a></li>
 </ul>
 </dd>
-<dt id="huracan.engine.constructor_set"><code class="flex name class">
-<span>class <span class="ident">constructor_set</span></span>
+<dt id="huracan.engine.constructor_SET"><code class="flex name class">
+<span>class <span class="ident">constructor_SET</span></span>
 <span>(</span><span>*args, **kwargs)</span>
 </code></dt>
 <dd>
@@ -1329,28 +1476,28 @@ class system(superset):
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">class constructor_set(type):
+<pre><code class="python">class constructor_SET(type):
     &#34;&#34;&#34;
     Set metaclass
     -------------
 
     Ensure all necessary methods are implemented in child classes.
     &#34;&#34;&#34;
-    def __new__(cls, name, bases, body):
+    def __new__(mcs, name, bases, body):
 
         for i in [&#39;add_component&#39;, &#39;add_set&#39;]:
-            if name != cls.__name__.split(&#39;_&#39;)[1] and i not in body:
+            if name != mcs.__name__.split(&#39;_&#39;)[1] and i not in body:
                 raise TypeError(f&#39;SET class build error: {i} method must be implemented in SET child classes.&#39;)
 
-        return super().__new__(cls, name, bases, body)</code></pre>
+        return super().__new__(mcs, name, bases, body)</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
 <li>builtins.type</li>
 </ul>
 </dd>
-<dt id="huracan.engine.constructor_superset"><code class="flex name class">
-<span>class <span class="ident">constructor_superset</span></span>
+<dt id="huracan.engine.constructor_SUPERSET"><code class="flex name class">
+<span>class <span class="ident">constructor_SUPERSET</span></span>
 <span>(</span><span>*args, **kwargs)</span>
 </code></dt>
 <dd>
@@ -1360,139 +1507,26 @@ class system(superset):
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">class constructor_superset(type):
+<pre><code class="python">class constructor_SUPERSET(type):
     &#34;&#34;&#34;
     Superset metaclass
     ------------------
 
     Ensure all necessary methods are implemented in child classes.
     &#34;&#34;&#34;
-    def __new__(cls, name, bases, body):
+    def __new__(mcs, name, bases, body):
 
         for i in [&#39;gobble&#39;]:
-            if name != cls.__name__.split(&#39;_&#39;)[1] and i not in body:
+            if name != mcs.__name__.split(&#39;_&#39;)[1] and i not in body:
                 if i not in body:
                     raise TypeError(f&#39;SUPERSET class build error: {i} method must be implemented in SUPERSET child classes.&#39;)
 
-        return super().__new__(cls, name, bases, body)</code></pre>
+        return super().__new__(mcs, name, bases, body)</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
 <li>builtins.type</li>
 </ul>
-</dd>
-<dt id="huracan.engine.set"><code class="flex name class">
-<span>class <span class="ident">set</span></span>
-</code></dt>
-<dd>
-<div class="desc"><p>Component set class</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">class set(metaclass=constructor_set):
-    &#34;&#34;&#34;
-    Component set class
-    &#34;&#34;&#34;
-    def __sub__(self, other):
-        &#34;&#34;&#34;
-        Set concatenation operator: &lt;set&gt; - &lt;component/set&gt;
-        &#34;&#34;&#34;
-        if isinstance(other, component):
-            self.add_component(other)
-            return self
-        if isinstance(other, set):
-            return self.add_set(other)
-
-    &#34;&#34;&#34;
-    Superset takeover
-    &#34;&#34;&#34;
-    def superset_takeover(self):
-        &#34;&#34;&#34;
-        Superset takeover
-        ---------------
-
-        When a set (a stream) is integrated in a superset
-        (a system), all set methods with a homonimous
-        superset method are renamed as protected
-        instance attributes, and their original names are
-        taken by pointers to the homonimous superset methods.
-        &#34;&#34;&#34;
-
-        special = r&#39;^__(.*?)\__$&#39;
-
-        def takeover(obj, method):
-            if hasattr(obj.superset, method):
-                return getattr(obj.superset, method)
-            else:
-                return getattr(obj, &#39;_&#39; + method)
-
-        for k in dir(self):
-            v = getattr(self, k)
-            # If the attribute k is:
-            #    - a method
-            #    - which is not special
-            #    - whose name is the name of another method in the stream&#39;s sytem
-            if isinstance(v, types.MethodType) and not re.match(special, k) and k in dir(self.superset):
-                # Create private method
-                setattr(self, &#39;_&#39; + k, v)
-                # Replace public method by takeover
-                setattr(self, k, takeover(self, k))</code></pre>
-</details>
-<h3>Subclasses</h3>
-<ul class="hlist">
-<li><a title="huracan.engine.stream" href="#huracan.engine.stream">stream</a></li>
-</ul>
-<h3>Methods</h3>
-<dl>
-<dt id="huracan.engine.set.superset_takeover"><code class="name flex">
-<span>def <span class="ident">superset_takeover</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"><h2 id="superset-takeover">Superset Takeover</h2>
-<p>When a set (a stream) is integrated in a superset
-(a system), all set methods with a homonimous
-superset method are renamed as protected
-instance attributes, and their original names are
-taken by pointers to the homonimous superset methods.</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def superset_takeover(self):
-    &#34;&#34;&#34;
-    Superset takeover
-    ---------------
-
-    When a set (a stream) is integrated in a superset
-    (a system), all set methods with a homonimous
-    superset method are renamed as protected
-    instance attributes, and their original names are
-    taken by pointers to the homonimous superset methods.
-    &#34;&#34;&#34;
-
-    special = r&#39;^__(.*?)\__$&#39;
-
-    def takeover(obj, method):
-        if hasattr(obj.superset, method):
-            return getattr(obj.superset, method)
-        else:
-            return getattr(obj, &#39;_&#39; + method)
-
-    for k in dir(self):
-        v = getattr(self, k)
-        # If the attribute k is:
-        #    - a method
-        #    - which is not special
-        #    - whose name is the name of another method in the stream&#39;s sytem
-        if isinstance(v, types.MethodType) and not re.match(special, k) and k in dir(self.superset):
-            # Create private method
-            setattr(self, &#39;_&#39; + k, v)
-            # Replace public method by takeover
-            setattr(self, k, takeover(self, k))</code></pre>
-</details>
-</dd>
-</dl>
 </dd>
 <dt id="huracan.engine.shaft"><code class="flex name class">
 <span>class <span class="ident">shaft</span></span>
@@ -1675,7 +1709,7 @@ float
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">class stream(set):
+<pre><code class="python">class stream(SET):
     &#34;&#34;&#34;
     Stream
     ------
@@ -1761,13 +1795,15 @@ float
                                                            &#39;the stream merge operation to be possible.&#39;
 
         n = max(self.stream_id[0], s.stream_id[0])  # Get largest stream_id
-        self.stream_id[0] = s.stream_id[0] = n  # Set largest stream_id for both merging streams
+        self.stream_id[0] = s.stream_id[0] = n      # Set largest stream_id for both merging streams
 
         merged = stream(parents=[self, s])
         merged.stream_id[0] = n + 1
 
         if hasattr(self, &#39;system&#39;) and hasattr(s, &#39;system&#39;):
+            print(self._run, &#39;\n&#39;, self.run, &#39;\n&#39;)
             self.superset = self.system = s.system = merged.system = self.system + s.system
+            print(self._run, &#39;\n&#39;, self.run, &#39;\n&#39;)
             self.system(merged)
         elif hasattr(self, &#39;system&#39;):
             self.system(s, merged)
@@ -2338,7 +2374,7 @@ float
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
-<li><a title="huracan.engine.set" href="#huracan.engine.set">set</a></li>
+<li><a title="huracan.engine.SET" href="#huracan.engine.SET">SET</a></li>
 </ul>
 <h3>Methods</h3>
 <dl>
@@ -2490,13 +2526,15 @@ float
                                                        &#39;the stream merge operation to be possible.&#39;
 
     n = max(self.stream_id[0], s.stream_id[0])  # Get largest stream_id
-    self.stream_id[0] = s.stream_id[0] = n  # Set largest stream_id for both merging streams
+    self.stream_id[0] = s.stream_id[0] = n      # Set largest stream_id for both merging streams
 
     merged = stream(parents=[self, s])
     merged.stream_id[0] = n + 1
 
     if hasattr(self, &#39;system&#39;) and hasattr(s, &#39;system&#39;):
+        print(self._run, &#39;\n&#39;, self.run, &#39;\n&#39;)
         self.superset = self.system = s.system = merged.system = self.system + s.system
+        print(self._run, &#39;\n&#39;, self.run, &#39;\n&#39;)
         self.system(merged)
     elif hasattr(self, &#39;system&#39;):
         self.system(s, merged)
@@ -3295,40 +3333,11 @@ exit.</p></div>
 </dl>
 <h3>Inherited members</h3>
 <ul class="hlist">
-<li><code><b><a title="huracan.engine.set" href="#huracan.engine.set">set</a></b></code>:
+<li><code><b><a title="huracan.engine.SET" href="#huracan.engine.SET">SET</a></b></code>:
 <ul class="hlist">
-<li><code><a title="huracan.engine.set.superset_takeover" href="#huracan.engine.set.superset_takeover">superset_takeover</a></code></li>
+<li><code><a title="huracan.engine.SET.superset_takeover" href="#huracan.engine.SET.superset_takeover">superset_takeover</a></code></li>
 </ul>
 </li>
-</ul>
-</dd>
-<dt id="huracan.engine.superset"><code class="flex name class">
-<span>class <span class="ident">superset</span></span>
-</code></dt>
-<dd>
-<div class="desc"><p>Component superset class</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">class superset(metaclass=constructor_superset):
-    &#34;&#34;&#34;
-    Component superset class
-    &#34;&#34;&#34;
-    def __call__(self, *args):
-        &#34;&#34;&#34;
-        Superset set addition operator: &lt;superset&gt;(&lt;list of sets&gt;)
-
-        The gobble function must be implemented by the superset
-        child class (system).
-
-        :type args: set
-        &#34;&#34;&#34;
-        self.gobble(list(args))</code></pre>
-</details>
-<h3>Subclasses</h3>
-<ul class="hlist">
-<li><a title="huracan.engine.system" href="#huracan.engine.system">system</a></li>
 </ul>
 </dd>
 <dt id="huracan.engine.system"><code class="flex name class">
@@ -3343,7 +3352,7 @@ exit.</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">class system(superset):
+<pre><code class="python">class system(SUPERSET):
     &#34;&#34;&#34;
     System
     ------
@@ -3709,7 +3718,7 @@ exit.</p></div>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
-<li><a title="huracan.engine.superset" href="#huracan.engine.superset">superset</a></li>
+<li><a title="huracan.engine.SUPERSET" href="#huracan.engine.SUPERSET">SUPERSET</a></li>
 </ul>
 <h3>Methods</h3>
 <dl>
@@ -4266,19 +4275,22 @@ flowing to children streams.</p></div>
 <li><h3><a href="#header-classes">Classes</a></h3>
 <ul>
 <li>
+<h4><code><a title="huracan.engine.SET" href="#huracan.engine.SET">SET</a></code></h4>
+<ul class="">
+<li><code><a title="huracan.engine.SET.superset_takeover" href="#huracan.engine.SET.superset_takeover">superset_takeover</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="huracan.engine.SUPERSET" href="#huracan.engine.SUPERSET">SUPERSET</a></code></h4>
+</li>
+<li>
 <h4><code><a title="huracan.engine.component" href="#huracan.engine.component">component</a></code></h4>
 </li>
 <li>
-<h4><code><a title="huracan.engine.constructor_set" href="#huracan.engine.constructor_set">constructor_set</a></code></h4>
+<h4><code><a title="huracan.engine.constructor_SET" href="#huracan.engine.constructor_SET">constructor_SET</a></code></h4>
 </li>
 <li>
-<h4><code><a title="huracan.engine.constructor_superset" href="#huracan.engine.constructor_superset">constructor_superset</a></code></h4>
-</li>
-<li>
-<h4><code><a title="huracan.engine.set" href="#huracan.engine.set">set</a></code></h4>
-<ul class="">
-<li><code><a title="huracan.engine.set.superset_takeover" href="#huracan.engine.set.superset_takeover">superset_takeover</a></code></li>
-</ul>
+<h4><code><a title="huracan.engine.constructor_SUPERSET" href="#huracan.engine.constructor_SUPERSET">constructor_SUPERSET</a></code></h4>
 </li>
 <li>
 <h4><code><a title="huracan.engine.shaft" href="#huracan.engine.shaft">shaft</a></code></h4>
@@ -4328,9 +4340,6 @@ flowing to children streams.</p></div>
 <li><code><a title="huracan.engine.stream.thrust_total" href="#huracan.engine.stream.thrust_total">thrust_total</a></code></li>
 <li><code><a title="huracan.engine.stream.v_exit" href="#huracan.engine.stream.v_exit">v_exit</a></code></li>
 </ul>
-</li>
-<li>
-<h4><code><a title="huracan.engine.superset" href="#huracan.engine.superset">superset</a></code></h4>
 </li>
 <li>
 <h4><code><a title="huracan.engine.system" href="#huracan.engine.system">system</a></code></h4>
