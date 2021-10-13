@@ -35,6 +35,7 @@ Huracan utilities
 -----------------
 &#34;&#34;&#34;
 
+import re
 import sys
 import inspect
 
@@ -75,7 +76,74 @@ def setattr_namespace(o, namespace):
         if not type(value) == type(o)\
                 and not isinstance(o, value if inspect.isclass(value) else type(value)):  # Avoid _o_, parent of _o_
             # Set namespace variables as attributes of the input object
-            setattr(o, key, value)</code></pre>
+            setattr(o, key, value)
+
+
+class markers:
+    &#34;&#34;&#34;
+    Markers class
+    -------------
+    &#34;&#34;&#34;
+    circle          = &#34;o&#34;
+    x               = &#34;x&#34;
+    thin_diamond    = &#34;d&#34;
+    triangle_down   = &#34;v&#34;
+    pentagon        = &#34;p&#34;
+    vline           = &#34;|&#34;
+    hline           = &#34;_&#34;
+    # Decent
+    point           = &#34;.&#34;
+    square          = &#34;s&#34;
+    plus            = &#34;+&#34;
+    triangle_up     = &#34;^&#34;
+    triangle_left   = &#34;&lt;&#34;
+    triangle_right  = &#34;&gt;&#34;
+    tri_down        = &#34;1&#34;
+    tri_up          = &#34;2&#34;
+    tri_left        = &#34;3&#34;
+    tri_right       = &#34;4&#34;
+    octagon         = &#34;8&#34;
+    hexagon1        = &#34;h&#34;
+    hexagon2        = &#34;H&#34;
+    diamond         = &#34;D&#34;
+    tickleft        = 0
+    tickright       = 1
+    tickup          = 2
+    tickdown        = 3
+    caretleft       = 4
+    caretright      = 5
+    caretup         = 6
+    caretdown       = 7
+    caretleft_base  = 8
+    caretright_base = 9
+    caretup_base    = 10
+    caretdown_base  = 11
+    # Wonky tier
+    plus_filled     = &#34;P&#34;
+    star            = &#34;*&#34;
+    # Garbage tier
+    pixel           = &#34;,&#34;
+
+    def __init__(self, hollow=False, plotter=&#39;plot&#39;):
+        self.hollow  = hollow
+        self.plotter = plotter
+
+        assert self.plotter in [&#39;plot&#39;, &#39;scatter&#39;], \
+            &#34;Plotter must be either &#39;plot&#39; (for plt.plot, ax.scatter) or &#39;scatter&#39; (plt.scatter)&#34;
+
+    def __getitem__(self, item):
+
+        special = r&#39;^__(.*?)\__$&#39;
+        keys    = [k for k in markers.__dict__.keys() if not re.match(special, k)]
+        marker  = {&#39;marker&#39;: markers.__dict__[keys[item]]}
+
+        if self.hollow:
+            if self.plotter == &#39;scatter&#39;:
+                marker[&#39;mfc&#39;]        = &#39;none&#39;
+            else:
+                marker[&#39;facecolors&#39;] = &#39;none&#39;
+
+        return marker</code></pre>
 </details>
 </section>
 <section>
@@ -154,6 +222,233 @@ if present in the provided namespace.</li>
 </dl>
 </section>
 <section>
+<h2 class="section-title" id="header-classes">Classes</h2>
+<dl>
+<dt id="huracan.utils.markers"><code class="flex name class">
+<span>class <span class="ident">markers</span></span>
+<span>(</span><span>hollow=False, plotter='plot')</span>
+</code></dt>
+<dd>
+<div class="desc"><h2 id="markers-class">Markers class</h2></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class markers:
+    &#34;&#34;&#34;
+    Markers class
+    -------------
+    &#34;&#34;&#34;
+    circle          = &#34;o&#34;
+    x               = &#34;x&#34;
+    thin_diamond    = &#34;d&#34;
+    triangle_down   = &#34;v&#34;
+    pentagon        = &#34;p&#34;
+    vline           = &#34;|&#34;
+    hline           = &#34;_&#34;
+    # Decent
+    point           = &#34;.&#34;
+    square          = &#34;s&#34;
+    plus            = &#34;+&#34;
+    triangle_up     = &#34;^&#34;
+    triangle_left   = &#34;&lt;&#34;
+    triangle_right  = &#34;&gt;&#34;
+    tri_down        = &#34;1&#34;
+    tri_up          = &#34;2&#34;
+    tri_left        = &#34;3&#34;
+    tri_right       = &#34;4&#34;
+    octagon         = &#34;8&#34;
+    hexagon1        = &#34;h&#34;
+    hexagon2        = &#34;H&#34;
+    diamond         = &#34;D&#34;
+    tickleft        = 0
+    tickright       = 1
+    tickup          = 2
+    tickdown        = 3
+    caretleft       = 4
+    caretright      = 5
+    caretup         = 6
+    caretdown       = 7
+    caretleft_base  = 8
+    caretright_base = 9
+    caretup_base    = 10
+    caretdown_base  = 11
+    # Wonky tier
+    plus_filled     = &#34;P&#34;
+    star            = &#34;*&#34;
+    # Garbage tier
+    pixel           = &#34;,&#34;
+
+    def __init__(self, hollow=False, plotter=&#39;plot&#39;):
+        self.hollow  = hollow
+        self.plotter = plotter
+
+        assert self.plotter in [&#39;plot&#39;, &#39;scatter&#39;], \
+            &#34;Plotter must be either &#39;plot&#39; (for plt.plot, ax.scatter) or &#39;scatter&#39; (plt.scatter)&#34;
+
+    def __getitem__(self, item):
+
+        special = r&#39;^__(.*?)\__$&#39;
+        keys    = [k for k in markers.__dict__.keys() if not re.match(special, k)]
+        marker  = {&#39;marker&#39;: markers.__dict__[keys[item]]}
+
+        if self.hollow:
+            if self.plotter == &#39;scatter&#39;:
+                marker[&#39;mfc&#39;]        = &#39;none&#39;
+            else:
+                marker[&#39;facecolors&#39;] = &#39;none&#39;
+
+        return marker</code></pre>
+</details>
+<h3>Class variables</h3>
+<dl>
+<dt id="huracan.utils.markers.caretdown"><code class="name">var <span class="ident">caretdown</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.caretdown_base"><code class="name">var <span class="ident">caretdown_base</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.caretleft"><code class="name">var <span class="ident">caretleft</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.caretleft_base"><code class="name">var <span class="ident">caretleft_base</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.caretright"><code class="name">var <span class="ident">caretright</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.caretright_base"><code class="name">var <span class="ident">caretright_base</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.caretup"><code class="name">var <span class="ident">caretup</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.caretup_base"><code class="name">var <span class="ident">caretup_base</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.circle"><code class="name">var <span class="ident">circle</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.diamond"><code class="name">var <span class="ident">diamond</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.hexagon1"><code class="name">var <span class="ident">hexagon1</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.hexagon2"><code class="name">var <span class="ident">hexagon2</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.hline"><code class="name">var <span class="ident">hline</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.octagon"><code class="name">var <span class="ident">octagon</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.pentagon"><code class="name">var <span class="ident">pentagon</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.pixel"><code class="name">var <span class="ident">pixel</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.plus"><code class="name">var <span class="ident">plus</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.plus_filled"><code class="name">var <span class="ident">plus_filled</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.point"><code class="name">var <span class="ident">point</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.square"><code class="name">var <span class="ident">square</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.star"><code class="name">var <span class="ident">star</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.thin_diamond"><code class="name">var <span class="ident">thin_diamond</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.tickdown"><code class="name">var <span class="ident">tickdown</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.tickleft"><code class="name">var <span class="ident">tickleft</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.tickright"><code class="name">var <span class="ident">tickright</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.tickup"><code class="name">var <span class="ident">tickup</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.tri_down"><code class="name">var <span class="ident">tri_down</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.tri_left"><code class="name">var <span class="ident">tri_left</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.tri_right"><code class="name">var <span class="ident">tri_right</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.tri_up"><code class="name">var <span class="ident">tri_up</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.triangle_down"><code class="name">var <span class="ident">triangle_down</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.triangle_left"><code class="name">var <span class="ident">triangle_left</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.triangle_right"><code class="name">var <span class="ident">triangle_right</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.triangle_up"><code class="name">var <span class="ident">triangle_up</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.vline"><code class="name">var <span class="ident">vline</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.x"><code class="name">var <span class="ident">x</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+</dl>
 </section>
 </article>
 <nav id="sidebar">
@@ -172,6 +467,51 @@ if present in the provided namespace.</li>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
 <li><code><a title="huracan.utils.setattr_namespace" href="#huracan.utils.setattr_namespace">setattr_namespace</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-classes">Classes</a></h3>
+<ul>
+<li>
+<h4><code><a title="huracan.utils.markers" href="#huracan.utils.markers">markers</a></code></h4>
+<ul class="two-column">
+<li><code><a title="huracan.utils.markers.caretdown" href="#huracan.utils.markers.caretdown">caretdown</a></code></li>
+<li><code><a title="huracan.utils.markers.caretdown_base" href="#huracan.utils.markers.caretdown_base">caretdown_base</a></code></li>
+<li><code><a title="huracan.utils.markers.caretleft" href="#huracan.utils.markers.caretleft">caretleft</a></code></li>
+<li><code><a title="huracan.utils.markers.caretleft_base" href="#huracan.utils.markers.caretleft_base">caretleft_base</a></code></li>
+<li><code><a title="huracan.utils.markers.caretright" href="#huracan.utils.markers.caretright">caretright</a></code></li>
+<li><code><a title="huracan.utils.markers.caretright_base" href="#huracan.utils.markers.caretright_base">caretright_base</a></code></li>
+<li><code><a title="huracan.utils.markers.caretup" href="#huracan.utils.markers.caretup">caretup</a></code></li>
+<li><code><a title="huracan.utils.markers.caretup_base" href="#huracan.utils.markers.caretup_base">caretup_base</a></code></li>
+<li><code><a title="huracan.utils.markers.circle" href="#huracan.utils.markers.circle">circle</a></code></li>
+<li><code><a title="huracan.utils.markers.diamond" href="#huracan.utils.markers.diamond">diamond</a></code></li>
+<li><code><a title="huracan.utils.markers.hexagon1" href="#huracan.utils.markers.hexagon1">hexagon1</a></code></li>
+<li><code><a title="huracan.utils.markers.hexagon2" href="#huracan.utils.markers.hexagon2">hexagon2</a></code></li>
+<li><code><a title="huracan.utils.markers.hline" href="#huracan.utils.markers.hline">hline</a></code></li>
+<li><code><a title="huracan.utils.markers.octagon" href="#huracan.utils.markers.octagon">octagon</a></code></li>
+<li><code><a title="huracan.utils.markers.pentagon" href="#huracan.utils.markers.pentagon">pentagon</a></code></li>
+<li><code><a title="huracan.utils.markers.pixel" href="#huracan.utils.markers.pixel">pixel</a></code></li>
+<li><code><a title="huracan.utils.markers.plus" href="#huracan.utils.markers.plus">plus</a></code></li>
+<li><code><a title="huracan.utils.markers.plus_filled" href="#huracan.utils.markers.plus_filled">plus_filled</a></code></li>
+<li><code><a title="huracan.utils.markers.point" href="#huracan.utils.markers.point">point</a></code></li>
+<li><code><a title="huracan.utils.markers.square" href="#huracan.utils.markers.square">square</a></code></li>
+<li><code><a title="huracan.utils.markers.star" href="#huracan.utils.markers.star">star</a></code></li>
+<li><code><a title="huracan.utils.markers.thin_diamond" href="#huracan.utils.markers.thin_diamond">thin_diamond</a></code></li>
+<li><code><a title="huracan.utils.markers.tickdown" href="#huracan.utils.markers.tickdown">tickdown</a></code></li>
+<li><code><a title="huracan.utils.markers.tickleft" href="#huracan.utils.markers.tickleft">tickleft</a></code></li>
+<li><code><a title="huracan.utils.markers.tickright" href="#huracan.utils.markers.tickright">tickright</a></code></li>
+<li><code><a title="huracan.utils.markers.tickup" href="#huracan.utils.markers.tickup">tickup</a></code></li>
+<li><code><a title="huracan.utils.markers.tri_down" href="#huracan.utils.markers.tri_down">tri_down</a></code></li>
+<li><code><a title="huracan.utils.markers.tri_left" href="#huracan.utils.markers.tri_left">tri_left</a></code></li>
+<li><code><a title="huracan.utils.markers.tri_right" href="#huracan.utils.markers.tri_right">tri_right</a></code></li>
+<li><code><a title="huracan.utils.markers.tri_up" href="#huracan.utils.markers.tri_up">tri_up</a></code></li>
+<li><code><a title="huracan.utils.markers.triangle_down" href="#huracan.utils.markers.triangle_down">triangle_down</a></code></li>
+<li><code><a title="huracan.utils.markers.triangle_left" href="#huracan.utils.markers.triangle_left">triangle_left</a></code></li>
+<li><code><a title="huracan.utils.markers.triangle_right" href="#huracan.utils.markers.triangle_right">triangle_right</a></code></li>
+<li><code><a title="huracan.utils.markers.triangle_up" href="#huracan.utils.markers.triangle_up">triangle_up</a></code></li>
+<li><code><a title="huracan.utils.markers.vline" href="#huracan.utils.markers.vline">vline</a></code></li>
+<li><code><a title="huracan.utils.markers.x" href="#huracan.utils.markers.x">x</a></code></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>

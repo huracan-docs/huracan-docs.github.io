@@ -49,6 +49,7 @@ from alexandria.shell import print_color, print_result
 from alexandria.data_structs.string import join_set_distance
 
 from huracan.constants import R
+from huracan.utils import markers
 
 
 class component:
@@ -886,7 +887,8 @@ class stream(SET):
                 # Color
                 color=color, alpha=0.65,
                 # Arrangement
-                zorder=1)
+                zorder=1,
+                )
         # Stages
         scatter(x=x, y=y,
                 # Figure
@@ -1093,10 +1095,8 @@ class system(SUPERSET):
              show=False,
              plot_label=None,                  # When called from a _system_takeover the plot_label and color
              color=colorscheme_one()[0],       # arguments are passed to the function, but disregarded.
+             colorblind=False,
              **kwargs):
-        &#34;&#34;&#34;
-        General system plot.
-        &#34;&#34;&#34;
         &#34;&#34;&#34;
         System plot
         -----------
@@ -1127,7 +1127,7 @@ class system(SUPERSET):
         x_system   = []
         y_system   = []
 
-        defaults   = {&#39;legend&#39;: True}
+        defaults   = {&#39;legend&#39;: kwargs.pop(&#39;legend&#39;, True)}
 
         scales     = {&#39;t0&#39;: 1,
                       &#39;p0&#39;: 1/1000,
@@ -1149,8 +1149,13 @@ class system(SUPERSET):
                 &#39;x_label&#39;: x_label,
                 &#39;y_label&#39;: y_label,
                 &#39;color&#39;: colorscheme_one()[self.streams.index(stream)],
-                &#39;zorder&#39;: 10-self.streams.index(stream),
+                &#39;zorder&#39;: self.streams.index(stream),
             }
+
+            if colorblind:
+                m      = markers(hollow=False)
+                marker = m[self.streams.index(stream)]
+                subplot_defaults = {**subplot_defaults, **marker}
 
             def gen_plotter(**defaults):
                 &#34;&#34;&#34;
@@ -1158,7 +1163,7 @@ class system(SUPERSET):
                 Any keyword arguemnts passed to the
                 _plot function overwrite the defaults.
                 &#34;&#34;&#34;
-                return lambda x, y, **kwargs: stream.plot_cycle_graph(x=x, y=y, **{**kwargs, **defaults})
+                return lambda x, y, **kwargs: stream.plot_cycle_graph(x=x, y=y, **{**defaults, **kwargs})
 
             x_stream = getattr(stream, x)()*x_scale
             y_stream = getattr(stream, y)()*y_scale
@@ -1175,10 +1180,22 @@ class system(SUPERSET):
                     # If the parent stream has no stages, get parent stream&#39;s gas state
                     p_x = x_parent[-1] if len(x_parent) != 0 else getattr(parent.gas, x)*x_scale
                     p_y = y_parent[-1] if len(y_parent) != 0 else getattr(parent.gas, y)*y_scale
+                    # Connector
                     if len(stream.components) &gt; 0:
                         x_system.append(np.array([p_x, x_stream[0]]))
                         y_system.append(np.array([p_y, y_stream[0]]))
-                        plotters.append(gen_plotter(color=subplot_defaults[&#39;color&#39;], x_label=None, y_label=None))
+
+                        connector_args = {&#39;color&#39;: subplot_defaults[&#39;color&#39;],
+                                          &#39;plot_label&#39;: None,
+                                          &#39;x_label&#39;: None,
+                                          &#39;y_label&#39;: None,
+                                          &#39;zorder&#39;: self.streams.index(stream),
+                                          }
+
+                        if colorblind:
+                            connector_args = {**connector_args, **marker}
+
+                        plotters.append(gen_plotter(**connector_args))
 
         # 2.2 Remove streams with no stages
         mask_x = np.array([a.size != 0 for a in x_system])
@@ -1193,8 +1210,11 @@ class system(SUPERSET):
         #     - fig=None, ax=None -&gt; plot_cycle_graph -&gt; fig in **kwargs keys
         #         - fig=None, ax=None -&gt; line, scatter
         #             - line, scatter plot onto active figure, axis
-        comparison(x=x_system, y=y_system, f=plotters,
+        comparison(x=x_system,
+                   y=y_system,
+                   f=plotters,
                    legend_loc=(0.875, 0.425),
+                   autocolor=False,
                    show=show,
                    **{**kwargs, **defaults})
 
@@ -1202,6 +1222,7 @@ class system(SUPERSET):
                  show=False,
                  plot_label=None,
                  color=colorscheme_one()[0],
+                 colorblind=False,
                  **kwargs
                  ):
         &#34;&#34;&#34;
@@ -1219,6 +1240,7 @@ class system(SUPERSET):
                  show=False,
                  plot_label=None,
                  color=colorscheme_one()[0],
+                 colorblind=False,
                  **kwargs):
         &#34;&#34;&#34;
         Pressure-Volume system plot.
@@ -1235,6 +1257,7 @@ class system(SUPERSET):
                  show=False,
                  plot_label=None,
                  color=colorscheme_one()[0],
+                 colorblind=False,
                  **kwargs):
         &#34;&#34;&#34;
         Temperature-Entropy system plot.
@@ -1251,6 +1274,7 @@ class system(SUPERSET):
                  show=False,
                  plot_label=None,
                  color=colorscheme_one()[0],
+                 colorblind=False,
                  **kwargs):
         &#34;&#34;&#34;
         Pressure-Enthalpy system plot.
@@ -2356,7 +2380,8 @@ float
                 # Color
                 color=color, alpha=0.65,
                 # Arrangement
-                zorder=1)
+                zorder=1,
+                )
         # Stages
         scatter(x=x, y=y,
                 # Figure
@@ -2903,7 +2928,8 @@ class arguments can be passed to this function.</p></div>
             # Color
             color=color, alpha=0.65,
             # Arrangement
-            zorder=1)
+            zorder=1,
+            )
     # Stages
     scatter(x=x, y=y,
             # Figure
@@ -3540,10 +3566,8 @@ exit.</p></div>
              show=False,
              plot_label=None,                  # When called from a _system_takeover the plot_label and color
              color=colorscheme_one()[0],       # arguments are passed to the function, but disregarded.
+             colorblind=False,
              **kwargs):
-        &#34;&#34;&#34;
-        General system plot.
-        &#34;&#34;&#34;
         &#34;&#34;&#34;
         System plot
         -----------
@@ -3574,7 +3598,7 @@ exit.</p></div>
         x_system   = []
         y_system   = []
 
-        defaults   = {&#39;legend&#39;: True}
+        defaults   = {&#39;legend&#39;: kwargs.pop(&#39;legend&#39;, True)}
 
         scales     = {&#39;t0&#39;: 1,
                       &#39;p0&#39;: 1/1000,
@@ -3596,8 +3620,13 @@ exit.</p></div>
                 &#39;x_label&#39;: x_label,
                 &#39;y_label&#39;: y_label,
                 &#39;color&#39;: colorscheme_one()[self.streams.index(stream)],
-                &#39;zorder&#39;: 10-self.streams.index(stream),
+                &#39;zorder&#39;: self.streams.index(stream),
             }
+
+            if colorblind:
+                m      = markers(hollow=False)
+                marker = m[self.streams.index(stream)]
+                subplot_defaults = {**subplot_defaults, **marker}
 
             def gen_plotter(**defaults):
                 &#34;&#34;&#34;
@@ -3605,7 +3634,7 @@ exit.</p></div>
                 Any keyword arguemnts passed to the
                 _plot function overwrite the defaults.
                 &#34;&#34;&#34;
-                return lambda x, y, **kwargs: stream.plot_cycle_graph(x=x, y=y, **{**kwargs, **defaults})
+                return lambda x, y, **kwargs: stream.plot_cycle_graph(x=x, y=y, **{**defaults, **kwargs})
 
             x_stream = getattr(stream, x)()*x_scale
             y_stream = getattr(stream, y)()*y_scale
@@ -3622,10 +3651,22 @@ exit.</p></div>
                     # If the parent stream has no stages, get parent stream&#39;s gas state
                     p_x = x_parent[-1] if len(x_parent) != 0 else getattr(parent.gas, x)*x_scale
                     p_y = y_parent[-1] if len(y_parent) != 0 else getattr(parent.gas, y)*y_scale
+                    # Connector
                     if len(stream.components) &gt; 0:
                         x_system.append(np.array([p_x, x_stream[0]]))
                         y_system.append(np.array([p_y, y_stream[0]]))
-                        plotters.append(gen_plotter(color=subplot_defaults[&#39;color&#39;], x_label=None, y_label=None))
+
+                        connector_args = {&#39;color&#39;: subplot_defaults[&#39;color&#39;],
+                                          &#39;plot_label&#39;: None,
+                                          &#39;x_label&#39;: None,
+                                          &#39;y_label&#39;: None,
+                                          &#39;zorder&#39;: self.streams.index(stream),
+                                          }
+
+                        if colorblind:
+                            connector_args = {**connector_args, **marker}
+
+                        plotters.append(gen_plotter(**connector_args))
 
         # 2.2 Remove streams with no stages
         mask_x = np.array([a.size != 0 for a in x_system])
@@ -3640,8 +3681,11 @@ exit.</p></div>
         #     - fig=None, ax=None -&gt; plot_cycle_graph -&gt; fig in **kwargs keys
         #         - fig=None, ax=None -&gt; line, scatter
         #             - line, scatter plot onto active figure, axis
-        comparison(x=x_system, y=y_system, f=plotters,
+        comparison(x=x_system,
+                   y=y_system,
+                   f=plotters,
                    legend_loc=(0.875, 0.425),
+                   autocolor=False,
                    show=show,
                    **{**kwargs, **defaults})
 
@@ -3649,6 +3693,7 @@ exit.</p></div>
                  show=False,
                  plot_label=None,
                  color=colorscheme_one()[0],
+                 colorblind=False,
                  **kwargs
                  ):
         &#34;&#34;&#34;
@@ -3666,6 +3711,7 @@ exit.</p></div>
                  show=False,
                  plot_label=None,
                  color=colorscheme_one()[0],
+                 colorblind=False,
                  **kwargs):
         &#34;&#34;&#34;
         Pressure-Volume system plot.
@@ -3682,6 +3728,7 @@ exit.</p></div>
                  show=False,
                  plot_label=None,
                  color=colorscheme_one()[0],
+                 colorblind=False,
                  **kwargs):
         &#34;&#34;&#34;
         Temperature-Entropy system plot.
@@ -3698,6 +3745,7 @@ exit.</p></div>
                  show=False,
                  plot_label=None,
                  color=colorscheme_one()[0],
+                 colorblind=False,
                  **kwargs):
         &#34;&#34;&#34;
         Pressure-Enthalpy system plot.
@@ -3857,10 +3905,31 @@ flowing to children streams.</p></div>
 </details>
 </dd>
 <dt id="huracan.engine.system.plot"><code class="name flex">
-<span>def <span class="ident">plot</span></span>(<span>self, x, y, x_scale=None, y_scale=None, x_label=None, y_label=None, show=False, plot_label=None, color='darkred', **kwargs)</span>
+<span>def <span class="ident">plot</span></span>(<span>self, x, y, x_scale=None, y_scale=None, x_label=None, y_label=None, show=False, plot_label=None, color='darkred', colorblind=False, **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>General system plot.</p></div>
+<div class="desc"><h2 id="system-plot">System Plot</h2>
+<p>x and y are the stream parameters to be
+plotted for each stream.</p>
+<p>Process
+1. Create figure
+2. Create state variable and plotters vectors
+2.1 Parent connectors
+3. comparison call</p>
+<p>comparison call
+- fig=None, ax=None -&gt; plot_cycle_graph -&gt; fig in **kwargs keys
+- fig=None, ax=None -&gt; line, scatter
+- line, scatter plot onto active figure, axis</p>
+<p>:param x_scale: Scaling factor.
+:param y_scale: Scaling factor.</p>
+<p>:type x:
+str
+:type y:
+str
+:type x_scale:
+float
+:type y_scale:
+float</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -3872,10 +3941,8 @@ flowing to children streams.</p></div>
          show=False,
          plot_label=None,                  # When called from a _system_takeover the plot_label and color
          color=colorscheme_one()[0],       # arguments are passed to the function, but disregarded.
+         colorblind=False,
          **kwargs):
-    &#34;&#34;&#34;
-    General system plot.
-    &#34;&#34;&#34;
     &#34;&#34;&#34;
     System plot
     -----------
@@ -3906,7 +3973,7 @@ flowing to children streams.</p></div>
     x_system   = []
     y_system   = []
 
-    defaults   = {&#39;legend&#39;: True}
+    defaults   = {&#39;legend&#39;: kwargs.pop(&#39;legend&#39;, True)}
 
     scales     = {&#39;t0&#39;: 1,
                   &#39;p0&#39;: 1/1000,
@@ -3928,8 +3995,13 @@ flowing to children streams.</p></div>
             &#39;x_label&#39;: x_label,
             &#39;y_label&#39;: y_label,
             &#39;color&#39;: colorscheme_one()[self.streams.index(stream)],
-            &#39;zorder&#39;: 10-self.streams.index(stream),
+            &#39;zorder&#39;: self.streams.index(stream),
         }
+
+        if colorblind:
+            m      = markers(hollow=False)
+            marker = m[self.streams.index(stream)]
+            subplot_defaults = {**subplot_defaults, **marker}
 
         def gen_plotter(**defaults):
             &#34;&#34;&#34;
@@ -3937,7 +4009,7 @@ flowing to children streams.</p></div>
             Any keyword arguemnts passed to the
             _plot function overwrite the defaults.
             &#34;&#34;&#34;
-            return lambda x, y, **kwargs: stream.plot_cycle_graph(x=x, y=y, **{**kwargs, **defaults})
+            return lambda x, y, **kwargs: stream.plot_cycle_graph(x=x, y=y, **{**defaults, **kwargs})
 
         x_stream = getattr(stream, x)()*x_scale
         y_stream = getattr(stream, y)()*y_scale
@@ -3954,10 +4026,22 @@ flowing to children streams.</p></div>
                 # If the parent stream has no stages, get parent stream&#39;s gas state
                 p_x = x_parent[-1] if len(x_parent) != 0 else getattr(parent.gas, x)*x_scale
                 p_y = y_parent[-1] if len(y_parent) != 0 else getattr(parent.gas, y)*y_scale
+                # Connector
                 if len(stream.components) &gt; 0:
                     x_system.append(np.array([p_x, x_stream[0]]))
                     y_system.append(np.array([p_y, y_stream[0]]))
-                    plotters.append(gen_plotter(color=subplot_defaults[&#39;color&#39;], x_label=None, y_label=None))
+
+                    connector_args = {&#39;color&#39;: subplot_defaults[&#39;color&#39;],
+                                      &#39;plot_label&#39;: None,
+                                      &#39;x_label&#39;: None,
+                                      &#39;y_label&#39;: None,
+                                      &#39;zorder&#39;: self.streams.index(stream),
+                                      }
+
+                    if colorblind:
+                        connector_args = {**connector_args, **marker}
+
+                    plotters.append(gen_plotter(**connector_args))
 
     # 2.2 Remove streams with no stages
     mask_x = np.array([a.size != 0 for a in x_system])
@@ -3972,14 +4056,17 @@ flowing to children streams.</p></div>
     #     - fig=None, ax=None -&gt; plot_cycle_graph -&gt; fig in **kwargs keys
     #         - fig=None, ax=None -&gt; line, scatter
     #             - line, scatter plot onto active figure, axis
-    comparison(x=x_system, y=y_system, f=plotters,
+    comparison(x=x_system,
+               y=y_system,
+               f=plotters,
                legend_loc=(0.875, 0.425),
+               autocolor=False,
                show=show,
                **{**kwargs, **defaults})</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.system.plot_T_S"><code class="name flex">
-<span>def <span class="ident">plot_T_S</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
+<span>def <span class="ident">plot_T_S</span></span>(<span>self, show=False, plot_label=None, color='darkred', colorblind=False, **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Temperature-Entropy system plot.</p></div>
@@ -3991,6 +4078,7 @@ flowing to children streams.</p></div>
              show=False,
              plot_label=None,
              color=colorscheme_one()[0],
+             colorblind=False,
              **kwargs):
     &#34;&#34;&#34;
     Temperature-Entropy system plot.
@@ -4005,7 +4093,7 @@ flowing to children streams.</p></div>
 </details>
 </dd>
 <dt id="huracan.engine.system.plot_T_p"><code class="name flex">
-<span>def <span class="ident">plot_T_p</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
+<span>def <span class="ident">plot_T_p</span></span>(<span>self, show=False, plot_label=None, color='darkred', colorblind=False, **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Temperature-Pressure system plot.</p></div>
@@ -4017,6 +4105,7 @@ flowing to children streams.</p></div>
              show=False,
              plot_label=None,
              color=colorscheme_one()[0],
+             colorblind=False,
              **kwargs
              ):
     &#34;&#34;&#34;
@@ -4032,7 +4121,7 @@ flowing to children streams.</p></div>
 </details>
 </dd>
 <dt id="huracan.engine.system.plot_p_H"><code class="name flex">
-<span>def <span class="ident">plot_p_H</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
+<span>def <span class="ident">plot_p_H</span></span>(<span>self, show=False, plot_label=None, color='darkred', colorblind=False, **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Pressure-Enthalpy system plot.</p></div>
@@ -4044,6 +4133,7 @@ flowing to children streams.</p></div>
              show=False,
              plot_label=None,
              color=colorscheme_one()[0],
+             colorblind=False,
              **kwargs):
     &#34;&#34;&#34;
     Pressure-Enthalpy system plot.
@@ -4058,7 +4148,7 @@ flowing to children streams.</p></div>
 </details>
 </dd>
 <dt id="huracan.engine.system.plot_p_V"><code class="name flex">
-<span>def <span class="ident">plot_p_V</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
+<span>def <span class="ident">plot_p_V</span></span>(<span>self, show=False, plot_label=None, color='darkred', colorblind=False, **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Pressure-Volume system plot.</p></div>
@@ -4070,6 +4160,7 @@ flowing to children streams.</p></div>
              show=False,
              plot_label=None,
              color=colorscheme_one()[0],
+             colorblind=False,
              **kwargs):
     &#34;&#34;&#34;
     Pressure-Volume system plot.
