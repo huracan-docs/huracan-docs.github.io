@@ -124,6 +124,9 @@ class markers:
     # Garbage tier
     pixel           = &#34;,&#34;
 
+    # Icompatible
+    incompatible    = [x]
+
     def __init__(self, hollow=False, plotter=&#39;plot&#39;):
         self.hollow  = hollow
         self.plotter = plotter
@@ -134,8 +137,10 @@ class markers:
     def __getitem__(self, item):
 
         special = r&#39;^__(.*?)\__$&#39;
-        keys    = [k for k in markers.__dict__.keys() if not re.match(special, k)]
-        marker  = {&#39;marker&#39;: markers.__dict__[keys[item]]}
+
+        m       = {k: markers.__dict__[k] for k in markers.__dict__.keys() if (self.hollow and k not in self.incompatible) or not self.hollow}
+        keys    = [k for k in m.keys() if not re.match(special, k)]
+        marker  = {&#39;marker&#39;: m[keys[item]]}
 
         if self.hollow:
             if self.plotter == &#39;scatter&#39;:
@@ -279,6 +284,9 @@ if present in the provided namespace.</li>
     # Garbage tier
     pixel           = &#34;,&#34;
 
+    # Icompatible
+    incompatible    = [x]
+
     def __init__(self, hollow=False, plotter=&#39;plot&#39;):
         self.hollow  = hollow
         self.plotter = plotter
@@ -289,8 +297,10 @@ if present in the provided namespace.</li>
     def __getitem__(self, item):
 
         special = r&#39;^__(.*?)\__$&#39;
-        keys    = [k for k in markers.__dict__.keys() if not re.match(special, k)]
-        marker  = {&#39;marker&#39;: markers.__dict__[keys[item]]}
+
+        m       = {k: markers.__dict__[k] for k in markers.__dict__.keys() if (self.hollow and k not in self.incompatible) or not self.hollow}
+        keys    = [k for k in m.keys() if not re.match(special, k)]
+        marker  = {&#39;marker&#39;: m[keys[item]]}
 
         if self.hollow:
             if self.plotter == &#39;scatter&#39;:
@@ -351,6 +361,10 @@ if present in the provided namespace.</li>
 <div class="desc"></div>
 </dd>
 <dt id="huracan.utils.markers.hline"><code class="name">var <span class="ident">hline</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="huracan.utils.markers.incompatible"><code class="name">var <span class="ident">incompatible</span></code></dt>
 <dd>
 <div class="desc"></div>
 </dd>
@@ -487,6 +501,7 @@ if present in the provided namespace.</li>
 <li><code><a title="huracan.utils.markers.hexagon1" href="#huracan.utils.markers.hexagon1">hexagon1</a></code></li>
 <li><code><a title="huracan.utils.markers.hexagon2" href="#huracan.utils.markers.hexagon2">hexagon2</a></code></li>
 <li><code><a title="huracan.utils.markers.hline" href="#huracan.utils.markers.hline">hline</a></code></li>
+<li><code><a title="huracan.utils.markers.incompatible" href="#huracan.utils.markers.incompatible">incompatible</a></code></li>
 <li><code><a title="huracan.utils.markers.octagon" href="#huracan.utils.markers.octagon">octagon</a></code></li>
 <li><code><a title="huracan.utils.markers.pentagon" href="#huracan.utils.markers.pentagon">pentagon</a></code></li>
 <li><code><a title="huracan.utils.markers.pixel" href="#huracan.utils.markers.pixel">pixel</a></code></li>
