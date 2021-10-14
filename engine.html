@@ -1153,7 +1153,7 @@ class system(SUPERSET):
             }
 
             if colorblind:
-                m      = markers(hollow=False)
+                m      = markers(hollow=True)
                 marker = m[self.streams.index(stream)]
                 subplot_defaults = {**subplot_defaults, **marker}
 
@@ -1186,14 +1186,15 @@ class system(SUPERSET):
                         y_system.append(np.array([p_y, y_stream[0]]))
 
                         connector_args = {&#39;color&#39;: subplot_defaults[&#39;color&#39;],
+                                          &#39;zorder&#39;: self.streams.index(stream),
                                           &#39;plot_label&#39;: None,
                                           &#39;x_label&#39;: None,
                                           &#39;y_label&#39;: None,
-                                          &#39;zorder&#39;: self.streams.index(stream),
+                                          &#39;marker&#39;: &#39;&#39;
                                           }
 
                         if colorblind:
-                            connector_args = {**connector_args, **marker}
+                            connector_args = {**connector_args}
 
                         plotters.append(gen_plotter(**connector_args))
 
@@ -3624,7 +3625,7 @@ exit.</p></div>
             }
 
             if colorblind:
-                m      = markers(hollow=False)
+                m      = markers(hollow=True)
                 marker = m[self.streams.index(stream)]
                 subplot_defaults = {**subplot_defaults, **marker}
 
@@ -3657,14 +3658,15 @@ exit.</p></div>
                         y_system.append(np.array([p_y, y_stream[0]]))
 
                         connector_args = {&#39;color&#39;: subplot_defaults[&#39;color&#39;],
+                                          &#39;zorder&#39;: self.streams.index(stream),
                                           &#39;plot_label&#39;: None,
                                           &#39;x_label&#39;: None,
                                           &#39;y_label&#39;: None,
-                                          &#39;zorder&#39;: self.streams.index(stream),
+                                          &#39;marker&#39;: &#39;&#39;
                                           }
 
                         if colorblind:
-                            connector_args = {**connector_args, **marker}
+                            connector_args = {**connector_args}
 
                         plotters.append(gen_plotter(**connector_args))
 
@@ -3999,7 +4001,7 @@ float</p></div>
         }
 
         if colorblind:
-            m      = markers(hollow=False)
+            m      = markers(hollow=True)
             marker = m[self.streams.index(stream)]
             subplot_defaults = {**subplot_defaults, **marker}
 
@@ -4032,14 +4034,15 @@ float</p></div>
                     y_system.append(np.array([p_y, y_stream[0]]))
 
                     connector_args = {&#39;color&#39;: subplot_defaults[&#39;color&#39;],
+                                      &#39;zorder&#39;: self.streams.index(stream),
                                       &#39;plot_label&#39;: None,
                                       &#39;x_label&#39;: None,
                                       &#39;y_label&#39;: None,
-                                      &#39;zorder&#39;: self.streams.index(stream),
+                                      &#39;marker&#39;: &#39;&#39;
                                       }
 
                     if colorblind:
-                        connector_args = {**connector_args, **marker}
+                        connector_args = {**connector_args}
 
                     plotters.append(gen_plotter(**connector_args))
 
