@@ -795,7 +795,7 @@ class stream(SET):
                               y_tick_ndecimals=2,
                               **further_custom)
 
-    def plot_p_H(self,
+    def plot_H_p(self,
                  show=False,
                  plot_label=None,
                  color=colorscheme_one()[0],
@@ -1271,7 +1271,7 @@ class system(SUPERSET):
                   y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
                   **{**args, **kwargs})
 
-    def plot_p_H(self,
+    def plot_H_p(self,
                  show=False,
                  plot_label=None,
                  color=colorscheme_one()[0],
@@ -2289,7 +2289,7 @@ float
                               y_tick_ndecimals=2,
                               **further_custom)
 
-    def plot_p_H(self,
+    def plot_H_p(self,
                  show=False,
                  plot_label=None,
                  color=colorscheme_one()[0],
@@ -2806,6 +2806,40 @@ parent class in the stream (n &gt; 1):
     return np.array([c.p0 for c in self.components])</code></pre>
 </details>
 </dd>
+<dt id="huracan.engine.stream.plot_H_p"><code class="name flex">
+<span>def <span class="ident">plot_H_p</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Pressure-Enthalpy stream plot.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def plot_H_p(self,
+             show=False,
+             plot_label=None,
+             color=colorscheme_one()[0],
+             **kwargs):
+    &#34;&#34;&#34;
+    Pressure-Enthalpy stream plot.
+    &#34;&#34;&#34;
+
+    figure((9, 5))
+
+    defaults = {&#39;x_label&#39;: &#39;p$_0$ [kPa]&#39;,
+                &#39;y_label&#39;: &#39;H$_0$ [kJ]&#39;,}
+
+    further_custom = {**defaults, **kwargs}
+
+    self.plot_cycle_graph(self.p0()/1000, self.H()/1000,
+                          color=color,
+                          plot_label=plot_label,
+                          show=show,
+                          # Further customization
+                          y_tick_ndecimals=2,
+                          **further_custom)</code></pre>
+</details>
+</dd>
 <dt id="huracan.engine.stream.plot_T_S"><code class="name flex">
 <span>def <span class="ident">plot_T_S</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
 </code></dt>
@@ -2941,40 +2975,6 @@ class arguments can be passed to this function.</p></div>
             y_label=y_label,
             show=show,
             **further_custom)</code></pre>
-</details>
-</dd>
-<dt id="huracan.engine.stream.plot_p_H"><code class="name flex">
-<span>def <span class="ident">plot_p_H</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Pressure-Enthalpy stream plot.</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def plot_p_H(self,
-             show=False,
-             plot_label=None,
-             color=colorscheme_one()[0],
-             **kwargs):
-    &#34;&#34;&#34;
-    Pressure-Enthalpy stream plot.
-    &#34;&#34;&#34;
-
-    figure((9, 5))
-
-    defaults = {&#39;x_label&#39;: &#39;p$_0$ [kPa]&#39;,
-                &#39;y_label&#39;: &#39;H$_0$ [kJ]&#39;,}
-
-    further_custom = {**defaults, **kwargs}
-
-    self.plot_cycle_graph(self.p0()/1000, self.H()/1000,
-                          color=color,
-                          plot_label=plot_label,
-                          show=show,
-                          # Further customization
-                          y_tick_ndecimals=2,
-                          **further_custom)</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.plot_p_V"><code class="name flex">
@@ -3743,7 +3743,7 @@ exit.</p></div>
                   y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
                   **{**args, **kwargs})
 
-    def plot_p_H(self,
+    def plot_H_p(self,
                  show=False,
                  plot_label=None,
                  color=colorscheme_one()[0],
@@ -4068,6 +4068,33 @@ float</p></div>
                **{**kwargs, **defaults})</code></pre>
 </details>
 </dd>
+<dt id="huracan.engine.system.plot_H_p"><code class="name flex">
+<span>def <span class="ident">plot_H_p</span></span>(<span>self, show=False, plot_label=None, color='darkred', colorblind=False, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Pressure-Enthalpy system plot.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def plot_H_p(self,
+             show=False,
+             plot_label=None,
+             color=colorscheme_one()[0],
+             colorblind=False,
+             **kwargs):
+    &#34;&#34;&#34;
+    Pressure-Enthalpy system plot.
+    &#34;&#34;&#34;
+    args = locals()
+    args.pop(&#39;self&#39;, None)
+    args.pop(&#39;kwargs&#39;, None)
+
+    self.plot(x=&#39;p0&#39;, x_label=&#39;p$_0$ [kPa]&#39;,
+              y=&#39;H&#39;,  y_label=&#39;H$_0$ [kJ]&#39;,
+              **{**args, **kwargs})</code></pre>
+</details>
+</dd>
 <dt id="huracan.engine.system.plot_T_S"><code class="name flex">
 <span>def <span class="ident">plot_T_S</span></span>(<span>self, show=False, plot_label=None, color='darkred', colorblind=False, **kwargs)</span>
 </code></dt>
@@ -4120,33 +4147,6 @@ float</p></div>
 
     self.plot(x=&#39;p0&#39;, x_label=&#39;p$_0$ [kPa]&#39;,
               y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
-              **{**args, **kwargs})</code></pre>
-</details>
-</dd>
-<dt id="huracan.engine.system.plot_p_H"><code class="name flex">
-<span>def <span class="ident">plot_p_H</span></span>(<span>self, show=False, plot_label=None, color='darkred', colorblind=False, **kwargs)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Pressure-Enthalpy system plot.</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def plot_p_H(self,
-             show=False,
-             plot_label=None,
-             color=colorscheme_one()[0],
-             colorblind=False,
-             **kwargs):
-    &#34;&#34;&#34;
-    Pressure-Enthalpy system plot.
-    &#34;&#34;&#34;
-    args = locals()
-    args.pop(&#39;self&#39;, None)
-    args.pop(&#39;kwargs&#39;, None)
-
-    self.plot(x=&#39;p0&#39;, x_label=&#39;p$_0$ [kPa]&#39;,
-              y=&#39;H&#39;,  y_label=&#39;H$_0$ [kJ]&#39;,
               **{**args, **kwargs})</code></pre>
 </details>
 </dd>
@@ -4409,10 +4409,10 @@ float</p></div>
 <li><code><a title="huracan.engine.stream.merge" href="#huracan.engine.stream.merge">merge</a></code></li>
 <li><code><a title="huracan.engine.stream.n_instances" href="#huracan.engine.stream.n_instances">n_instances</a></code></li>
 <li><code><a title="huracan.engine.stream.p0" href="#huracan.engine.stream.p0">p0</a></code></li>
+<li><code><a title="huracan.engine.stream.plot_H_p" href="#huracan.engine.stream.plot_H_p">plot_H_p</a></code></li>
 <li><code><a title="huracan.engine.stream.plot_T_S" href="#huracan.engine.stream.plot_T_S">plot_T_S</a></code></li>
 <li><code><a title="huracan.engine.stream.plot_T_p" href="#huracan.engine.stream.plot_T_p">plot_T_p</a></code></li>
 <li><code><a title="huracan.engine.stream.plot_cycle_graph" href="#huracan.engine.stream.plot_cycle_graph">plot_cycle_graph</a></code></li>
-<li><code><a title="huracan.engine.stream.plot_p_H" href="#huracan.engine.stream.plot_p_H">plot_p_H</a></code></li>
 <li><code><a title="huracan.engine.stream.plot_p_V" href="#huracan.engine.stream.plot_p_V">plot_p_V</a></code></li>
 <li><code><a title="huracan.engine.stream.power_available" href="#huracan.engine.stream.power_available">power_available</a></code></li>
 <li><code><a title="huracan.engine.stream.power_jet" href="#huracan.engine.stream.power_jet">power_jet</a></code></li>
@@ -4441,9 +4441,9 @@ float</p></div>
 <li><code><a title="huracan.engine.system.gobble" href="#huracan.engine.system.gobble">gobble</a></code></li>
 <li><code><a title="huracan.engine.system.parents" href="#huracan.engine.system.parents">parents</a></code></li>
 <li><code><a title="huracan.engine.system.plot" href="#huracan.engine.system.plot">plot</a></code></li>
+<li><code><a title="huracan.engine.system.plot_H_p" href="#huracan.engine.system.plot_H_p">plot_H_p</a></code></li>
 <li><code><a title="huracan.engine.system.plot_T_S" href="#huracan.engine.system.plot_T_S">plot_T_S</a></code></li>
 <li><code><a title="huracan.engine.system.plot_T_p" href="#huracan.engine.system.plot_T_p">plot_T_p</a></code></li>
-<li><code><a title="huracan.engine.system.plot_p_H" href="#huracan.engine.system.plot_p_H">plot_p_H</a></code></li>
 <li><code><a title="huracan.engine.system.plot_p_V" href="#huracan.engine.system.plot_p_V">plot_p_V</a></code></li>
 <li><code><a title="huracan.engine.system.power_available" href="#huracan.engine.system.power_available">power_available</a></code></li>
 <li><code><a title="huracan.engine.system.power_jet" href="#huracan.engine.system.power_jet">power_jet</a></code></li>
