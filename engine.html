@@ -27,7 +27,7 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python"># SPDX-FileCopyrightText: © 2021 Antonio López Rivera &lt;antonlopezr99@gmail.com&gt;
+<pre><code class="python"># SPDX-FileCopyrightText: © 2024 Antonio López Rivera &lt;antonlopezr99@gmail.com&gt;
 # SPDX-License-Identifier: GPL-3.0-only
 
 &#34;&#34;&#34;
@@ -37,50 +37,19 @@ Huracan engine elements
 
 import re
 import types
+import warnings
 import numpy as np
 from copy import deepcopy
 
-from mpl_plotter import figure
-from mpl_plotter.two_d import line, scatter, comparison
-from mpl_plotter.color.schemes import colorscheme_one
-from mpl_plotter.color.functions import delta
-
-from alexandria.shell import print_color, print_result
-from alexandria.data_structs.string import join_set_distance
+import matplotlib.pyplot as plt
 
 from huracan.constants import R
-from huracan.utils import markers
+from huracan import component_codes
+from huracan.physical_quantities import physical_quantities
+from huracan.utils import markers, join_set_distance, delta, colorscheme_one
 
 
-class component:
-    &#34;&#34;&#34;
-    Component
-    ---------
-    &#34;&#34;&#34;
-    def __sub__(self, other):
-        &#34;&#34;&#34;
-        Stream creation operator: &lt;component&gt; - &lt;component&gt;
-        &#34;&#34;&#34;
-        if isinstance(other, component):
-            s = stream()-other
-            return s
-
-    def __call__(self, gas):
-        &#34;&#34;&#34;
-        Component transfer function execution
-        &#34;&#34;&#34;
-        p = self.tf(gas)
-        for k, v in p.__dict__.items():
-            if k[-2:] == &#39;01&#39;:
-                k = k[0] + &#39;0&#39;
-            setattr(self, k, v)
-
-        # Gas state variables
-        for sv in [&#39;V&#39;, &#39;S&#39;, &#39;H&#39;]:
-            setattr(self, sv, getattr(gas, sv))
-
-
-class constructor_SET(type):
+class component_set_constructor(type):
     &#34;&#34;&#34;
     Set metaclass
     -------------
@@ -89,14 +58,14 @@ class constructor_SET(type):
     &#34;&#34;&#34;
     def __new__(mcs, name, bases, body):
 
-        for i in [&#39;add_component&#39;, &#39;add_set&#39;]:
-            if name != mcs.__name__.split(&#39;_&#39;)[1] and i not in body:
-                raise TypeError(f&#39;SET class build error: {i} method must be implemented in SET child classes.&#39;)
+        for method in [&#39;add_component&#39;, &#39;add_set&#39;]:
+            if method not in body:
+                raise TypeError(f&#39;set_of_components class build error: {method} method must be implemented in set_of_components child classes.&#39;)
 
         return super().__new__(mcs, name, bases, body)
 
 
-class constructor_SUPERSET(type):
+class stream_set_constructor(type):
     &#34;&#34;&#34;
     Superset metaclass
     ------------------
@@ -105,15 +74,14 @@ class constructor_SUPERSET(type):
     &#34;&#34;&#34;
     def __new__(mcs, name, bases, body):
 
-        for i in [&#39;gobble&#39;]:
-            if name != mcs.__name__.split(&#39;_&#39;)[1] and i not in body:
-                if i not in body:
-                    raise TypeError(f&#39;SUPERSET class build error: {i} method must be implemented in SUPERSET child classes.&#39;)
+        for method in [&#39;gobble&#39;]:
+            if method not in body:
+                raise TypeError(f&#39;set_of_streams class build error: {method} method must be implemented in set_of_streams child classes.&#39;)
 
         return super().__new__(mcs, name, bases, body)
 
 
-class SET(metaclass=constructor_SET):
+class set_of_components:
     &#34;&#34;&#34;
     Component set class
     &#34;&#34;&#34;
@@ -124,16 +92,13 @@ class SET(metaclass=constructor_SET):
         if isinstance(other, component):
             self.add_component(other)
             return self
-        if isinstance(other, SET):
+        if isinstance(other, set_of_components):
             return self.add_set(other)
 
-    &#34;&#34;&#34;
-    Superset takeover
-    &#34;&#34;&#34;
-    def superset_takeover(self):
+    def integrate_in_system(self):
         &#34;&#34;&#34;
-        Superset takeover
-        ---------------
+        Integrate stream in stream system
+        ---------------------------------
 
         When a set (a stream) is integrated in a superset
         (a system), all set methods with a homonimous
@@ -164,7 +129,7 @@ class SET(metaclass=constructor_SET):
                 setattr(self, k, takeover(self, k))
 
 
-class SUPERSET(metaclass=constructor_SUPERSET):
+class set_of_streams:
     &#34;&#34;&#34;
     Component superset class
     &#34;&#34;&#34;
@@ -178,6 +143,34 @@ class SUPERSET(metaclass=constructor_SUPERSET):
         :type args: set
         &#34;&#34;&#34;
         self.gobble(list(args))
+
+
+class component:
+    &#34;&#34;&#34;
+    Component
+    ---------
+    &#34;&#34;&#34;
+    def __sub__(self, other):
+        &#34;&#34;&#34;
+        Stream creation operator: &lt;component&gt; - &lt;component&gt;
+        &#34;&#34;&#34;
+        if isinstance(other, component):
+            s = stream()-other
+            return s
+
+    def __call__(self, gas):
+        &#34;&#34;&#34;
+        Component transfer function execution
+        &#34;&#34;&#34;
+        p = self.tf(gas)
+        for k, v in p.__dict__.items():
+            if k[-2:] == &#39;01&#39;:
+                k = k[0] + &#39;0&#39;
+            setattr(self, k, v)
+
+        # Gas state variables
+        for sv in [&#39;V&#39;, &#39;S&#39;, &#39;H&#39;]:
+            setattr(self, sv, getattr(gas, sv))
 
 
 class shaft:
@@ -238,7 +231,7 @@ class shaft:
         return w_r_m + w_r_e
 
 
-class stream(SET):
+class stream(set_of_components, metaclass=component_set_constructor):
     &#34;&#34;&#34;
     Stream
     ------
@@ -293,7 +286,7 @@ class stream(SET):
         self.gas = gas
         return self
 
-    def __mul__(self, other):                       # TODO: stream diversion
+    def __mul__(self, other):
         &#34;&#34;&#34;
         Stream diversion operator: &lt;stream&gt; * n     for n: 0 =&lt; float =&lt; 1
         &#34;&#34;&#34;
@@ -349,8 +342,8 @@ class stream(SET):
         assert hasattr(self, &#39;gas&#39;), &#39;The stream must have a gas attribute for&#39; \
                                      &#39;the stream diversion operation to be possible.&#39;
 
-        main = stream(self.gas, fr=fr, parents=[self])
-        div  = stream(self.gas, fr=1-fr, parents=[self])
+        main = stream(deepcopy(self.gas), fr=fr, parents=[self])
+        div  = stream(deepcopy(self.gas), fr=1-fr, parents=[self])
 
         # Stream ID
         main.stream_id[0] = self.stream_id[0] + 1
@@ -407,22 +400,8 @@ class stream(SET):
         if there are more than 1 components of the same class
         in the stream.
         &#34;&#34;&#34;
-        codes = {&#39;fan&#39;:                &#39;fn&#39;,
-                 &#39;prop&#39;:               &#39;pr&#39;,
-                 &#39;propfan&#39;:            &#39;pf&#39;,
-                 &#39;intake&#39;:             &#39;it&#39;,
-                 &#39;inlet&#39;:              &#39;il&#39;,
-                 &#39;compressor&#39;:         &#39;cp&#39;,
-                 &#39;combustion_chamber&#39;: &#39;cc&#39;,
-                 &#39;turbine&#39;:            &#39;tb&#39;,
-                 &#39;nozzle&#39;:             &#39;nz&#39;,
-
-                 &#39;intercooler&#39;:        &#39;ic&#39;,
-                 &#39;recuperator&#39;:        &#39;rc&#39;,
-                 &#39;afterburner&#39;:        &#39;ab&#39;,
-                 }
-
-        code = codes[c.__class__.__name__] + self.n_instances(c)
+        
+        code = component_codes[c.__class__.__name__] + self.n_instances(c)
 
         return f&#39;{&#34;.&#34;.join([str(c) for c in self.stream_id])}.{code}&#39;
 
@@ -459,13 +438,13 @@ class stream(SET):
 
         for c in self.components:
             section_name = join_set_distance(c.stage, c.__class__.__name__.capitalize().replace(&#34;_&#34;, &#34; &#34;), d)
-            print_color(section_name, &#39;green&#39;)
+            print(section_name)
 
             if c.__class__.__name__ == &#39;nozzle&#39;:
                 if c.choked:
-                    print_color(&#39; &#39;*d + &#39;Choked flow&#39;, &#39;red&#39;)
-            print_result(&#39; &#39;*(d+1) + &#39;T0&#39;, c.t0, &#39;[K]&#39;)
-            print_result(&#39; &#39;*(d+1) + &#39;p0&#39;, c.p0, &#39;[Pa]&#39;)
+                    print(&#39; &#39;*d + &#39;Choked flow&#39;)
+            print(f&#39;{&#34; &#34;*d} T0 {str(c.t0)[:10]} [K]&#39;)
+            print(f&#39;{&#34; &#34;*d} p0 {str(c.p0)[:10]} [Pa]&#39;)
 
     &#34;&#34;&#34;
     Stream runtime functions
@@ -483,7 +462,7 @@ class stream(SET):
         self.choked = False                                 # FIXME: choked flow implementation is ugly
 
         for c in self.components:
-            c(self.gas)                     # Run thermodynamic process on stream gas
+            c(self.gas)                    # Run thermodynamic process on stream gas
             c.stage = self.stage_name(c)   # Set component stage name
 
             if hasattr(c, &#39;choked&#39;) and c.choked:           # FIXME: ugly
@@ -752,14 +731,15 @@ class stream(SET):
              plot_label=None,
              color=colorscheme_one()[0],
              **kwargs):
+        warnings.warn(&#39;`&lt;stream or system&gt;.plot_T_S(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;S&#34;, &#34;y=t0&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
         &#34;&#34;&#34;
         Temperature-Entropy stream plot.
         &#34;&#34;&#34;
 
-        figure((9, 5))
+        plt.figure(figsize=(9, 5))
 
-        defaults = {&#39;x_label&#39;: &#39;$\Delta$S [kJ/K/n]&#39;,
-                    &#39;y_label&#39;: &#39;T$_0$ [K]&#39;,}
+        defaults = {&#39;label_x&#39;: r&#39;$\Delta$S [kJ/K/n]&#39;,
+                    &#39;label_y&#39;: r&#39;T$_0$ [K]&#39;,}
 
         further_custom = {**defaults, **kwargs}
 
@@ -768,7 +748,7 @@ class stream(SET):
                               plot_label=plot_label,
                               show=show,
                               # Further customization
-                              y_tick_ndecimals=2,
+                              tick_label_decimals_y=2,
                               **further_custom)
 
     def plot_p_V(self,
@@ -776,14 +756,15 @@ class stream(SET):
                  plot_label=None,
                  color=colorscheme_one()[0],
                  **kwargs):
+        warnings.warn(&#39;`&lt;stream or system&gt;.plot_p_V(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;V&#34;, &#34;y=p0&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
         &#34;&#34;&#34;
         Pressure-Volume stream plot.
         &#34;&#34;&#34;
 
-        figure((9, 5))
+        plt.figure(figsize=(9, 5))
 
-        defaults = {&#39;x_label&#39;: &#39;v$_0$ [m$^3$/n]&#39;,
-                    &#39;y_label&#39;: &#39;p$_0$ [kPa]&#39;}
+        defaults = {&#39;label_x&#39;: &#39;v$_0$ [m$^3$/n]&#39;,
+                    &#39;label_y&#39;: &#39;p$_0$ [kPa]&#39;}
 
         further_custom = {**defaults, **kwargs}
 
@@ -792,7 +773,7 @@ class stream(SET):
                               plot_label=plot_label,
                               show=show,
                               # Further customization
-                              y_tick_ndecimals=2,
+                              tick_label_decimals_y=2,
                               **further_custom)
 
     def plot_H_p(self,
@@ -800,14 +781,15 @@ class stream(SET):
                  plot_label=None,
                  color=colorscheme_one()[0],
                  **kwargs):
+        warnings.warn(&#39;`&lt;stream or system&gt;.plot_H_p(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;p0&#34;, y=&#34;H&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
         &#34;&#34;&#34;
         Pressure-Enthalpy stream plot.
         &#34;&#34;&#34;
 
-        figure((9, 5))
+        plt.figure(figsize=(9, 5))
 
-        defaults = {&#39;x_label&#39;: &#39;p$_0$ [kPa]&#39;,
-                    &#39;y_label&#39;: &#39;H$_0$ [kJ]&#39;,}
+        defaults = {&#39;label_x&#39;: &#39;p$_0$ [kPa]&#39;,
+                    &#39;label_y&#39;: &#39;H$_0$ [kJ]&#39;,}
 
         further_custom = {**defaults, **kwargs}
 
@@ -816,7 +798,7 @@ class stream(SET):
                               plot_label=plot_label,
                               show=show,
                               # Further customization
-                              y_tick_ndecimals=2,
+                              tick_label_decimals_y=2,
                               **further_custom)
 
     def plot_T_p(self,
@@ -824,14 +806,15 @@ class stream(SET):
              plot_label=None,
              color=colorscheme_one()[0],
              **kwargs):
+        warnings.warn(&#39;`&lt;stream or system&gt;.plot_T_p(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;V&#34;, &#34;y=p0&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
         &#34;&#34;&#34;
         Temperature-Pressure system plot.
         &#34;&#34;&#34;
 
-        figure((9, 5))
+        plt.figure(figsize=(9, 5))
 
-        defaults = {&#39;x_label&#39;: &#39;p$_0$ [kPa]&#39;,
-                    &#39;y_label&#39;: &#39;T$_0$ [K]&#39;}
+        defaults = {&#39;label_x&#39;: &#39;p$_0$ [kPa]&#39;,
+                    &#39;label_y&#39;: &#39;T$_0$ [K]&#39;}
 
         further_custom = {**defaults, **kwargs}
 
@@ -840,13 +823,48 @@ class stream(SET):
                               plot_label=plot_label,
                               show=show,
                               # Further customization
-                              x_tick_ndecimals=2,
+                              tick_label_decimals_x=2,
                               **further_custom)
+
+    def plot(self, 
+             x, y,
+             show=False,
+             plot_label=None,
+             color=colorscheme_one()[0],
+             **kwargs):
+        &#34;&#34;&#34;
+        Create a cycle plot of two physical quantities of the stream.
+        &#34;&#34;&#34;
+
+        name_x_default, label_x_default, scale_x_default = physical_quantities[x]
+        name_y_default, label_y_default, scale_y_default = physical_quantities[y]
+
+        scale_x = scale_x_default if isinstance(scale_x, type(None)) else scale_x
+        scale_y = scale_y_default if isinstance(scale_y, type(None)) else scale_y
+        label_x = label_x_default if isinstance(label_x, type(None)) else label_x
+        label_y = label_y_default if isinstance(label_y, type(None)) else label_y
+
+        x = getattr(self, x) * scale_x
+        y = getattr(self, y) * scale_y
+
+        defaults = {&#39;label_x&#39;: label_x,
+                    &#39;label_y&#39;: label_y}
+
+        further_custom = {**defaults, **kwargs}
+
+        self.plot_cycle_graph(
+            x, y,
+            color=color,
+            plot_label=plot_label,
+            show=show,
+            # Further customization
+            tick_label_decimals_x=2,
+            **further_custom)
 
     def plot_cycle_graph(self,
                          x, y,
                          plot_label,
-                         x_label, y_label,
+                         label_x, label_y,
                          color=colorscheme_one()[0],
                          show=False,
                          **kwargs
@@ -857,51 +875,31 @@ class stream(SET):
         The default arguments plus any valid MPL Plotter line plotting
         class arguments can be passed to this function.
         &#34;&#34;&#34;
+
         fig = kwargs.pop(&#39;fig&#39;, None)
 
-        defaults = {
-            # Specifics
-            &#39;point_size&#39;: 30,
-            # Markers
-            &#39;marker&#39;: &#39;x&#39;,
-            # Color
-            &#39;color&#39;: delta(color, -0.3),
-            # Arrangement
-            &#39;zorder&#39;: 2,
-            # Further customization
-            &#39;aspect&#39;: 1/2,
-            &#39;x_tick_number&#39;: 10,
-            &#39;y_tick_number&#39;: 10,
-            &#39;demo_pad_plot&#39;: True,
-            &#39;y_label_pad&#39;: 5,
-        }
+        plt.plot(x, y,
+            color=color,
+            marker=kwargs.get(&#39;marker&#39;, &#39;x&#39;), markeredgecolor=delta(color, -0.3), markersize=8, markeredgewidth=2, markerfacecolor=kwargs.get(&#39;facecolors&#39;, color),
+            label=plot_label,
+            zorder=kwargs.get(&#39;zorder&#39;, 0) + 2.5,
+        )
+        plt.scatter(x, y,
+            marker=kwargs.get(&#39;marker&#39;, &#39;x&#39;), s=55,
+            edgecolor=delta(color, -0.3), linewidth=1.5, 
+            facecolor=kwargs.get(&#39;facecolors&#39;, color),
+            zorder=kwargs.get(&#39;zorder&#39;, 0) + 1e2,
+        )
 
-        further_custom = {**defaults, **kwargs}
+        ax = plt.gca()
 
-        # Connecting lines
-        line(   x=x, y=y,
-                # Figure
-                fig=fig,
-                # Specifics
-                line_width=1,
-                # Color
-                color=color, alpha=0.65,
-                # Arrangement
-                zorder=1,
-                )
-        # Stages
-        scatter(x=x, y=y,
-                # Figure
-                fig=fig,
-                # Further customization
-                plot_label=plot_label,
-                x_label=x_label,
-                y_label=y_label,
-                show=show,
-                **further_custom)
+        if label_x is not None: ax.set_xlabel(label_x)
+        if label_y is not None: ax.set_ylabel(label_y)
 
+        if show:
+            plt.show()
 
-class system(SUPERSET):
+class system(set_of_streams, metaclass=stream_set_constructor):
     &#34;&#34;&#34;
     System
     ------
@@ -943,7 +941,7 @@ class system(SUPERSET):
         for s in streams:
             self.streams.append(s)
             s.superset = s.system = self
-            s.superset_takeover()
+            s.integrate_in_system()
 
     def retrieve(self, item):
         &#34;&#34;&#34;
@@ -1090,8 +1088,8 @@ class system(SUPERSET):
     &#34;&#34;&#34;
     def plot(self,
              x, y,
-             x_scale=None, y_scale=None,
-             x_label=None, y_label=None,
+             scale_x=None, scale_y=None,
+             label_x=None, label_y=None,
              show=False,
              plot_label=None,                  # When called from a _system_takeover the plot_label and color
              color=colorscheme_one()[0],       # arguments are passed to the function, but disregarded.
@@ -1115,41 +1113,42 @@ class system(SUPERSET):
                 - fig=None, ax=None -&gt; line, scatter
                     - line, scatter plot onto active figure, axis
 
-        :param x_scale: Scaling factor.
-        :param y_scale: Scaling factor.
+        :param scale_x: Scaling factor.
+        :param scale_y: Scaling factor.
 
         :type x:        str
         :type y:        str
-        :type x_scale:  float
-        :type y_scale:  float
+        :type scale_x:  float
+        :type scale_y:  float
         &#34;&#34;&#34;
+
         plotters   = []
         x_system   = []
         y_system   = []
 
         defaults   = {&#39;legend&#39;: kwargs.pop(&#39;legend&#39;, True)}
 
-        scales     = {&#39;t0&#39;: 1,
-                      &#39;p0&#39;: 1/1000,
-                      &#39;V&#39;:  1,
-                      &#39;S&#39;:  1/1000,
-                      &#39;H&#39;:  1/1000}
-        x_scale    = scales[x] if isinstance(x_scale, type(None)) else x_scale
-        y_scale    = scales[y] if isinstance(y_scale, type(None)) else y_scale
+        name_x_default, label_x_default, scale_x_default = physical_quantities[x]
+        name_y_default, label_y_default, scale_y_default = physical_quantities[y]
+
+        scale_x    = scale_x_default if isinstance(scale_x, type(None)) else scale_x
+        scale_y    = scale_y_default if isinstance(scale_y, type(None)) else scale_y
+        label_x    = label_x_default if isinstance(label_x, type(None)) else label_x
+        label_y    = label_y_default if isinstance(label_y, type(None)) else label_y
 
         # 1. Create figure
-        figure((9, 5))
+        plt.figure(figsize=(9, 5))
 
         # 2. Create state variable and plotters vectors
-        for stream in self.streams:
+        for i, stream in enumerate(self.streams):
 
             # Plot defaults
             subplot_defaults = {
                 &#39;plot_label&#39;: f&#39;{&#34;.&#34;.join([str(c) for c in stream.stream_id])}&#39;,
-                &#39;x_label&#39;: x_label,
-                &#39;y_label&#39;: y_label,
+                &#39;label_x&#39;: label_x,
+                &#39;label_y&#39;: label_y,
                 &#39;color&#39;: colorscheme_one()[self.streams.index(stream)],
-                &#39;zorder&#39;: self.streams.index(stream),
+                &#39;zorder&#39;: self.streams.index(stream)
             }
 
             if colorblind:
@@ -1160,13 +1159,13 @@ class system(SUPERSET):
             def gen_plotter(**defaults):
                 &#34;&#34;&#34;
                 Returns a plotter using the defaults.
-                Any keyword arguemnts passed to the
+                Any keyword arguments passed to the
                 _plot function overwrite the defaults.
                 &#34;&#34;&#34;
                 return lambda x, y, **kwargs: stream.plot_cycle_graph(x=x, y=y, **{**defaults, **kwargs})
 
-            x_stream = getattr(stream, x)()*x_scale
-            y_stream = getattr(stream, y)()*y_scale
+            x_stream = getattr(stream, x)()*scale_x
+            y_stream = getattr(stream, y)()*scale_y
 
             plotters.append(gen_plotter(**subplot_defaults))
             x_system.append(x_stream)
@@ -1175,23 +1174,25 @@ class system(SUPERSET):
             # 2.1 Parent connectors
             if hasattr(stream, &#39;parents&#39;):
                 for parent in stream.parents:
-                    x_parent = getattr(parent, x)()*x_scale
-                    y_parent = getattr(parent, y)()*y_scale
+                    x_parent = getattr(parent, x)()*scale_x
+                    y_parent = getattr(parent, y)()*scale_y
                     # If the parent stream has no stages, get parent stream&#39;s gas state
-                    p_x = x_parent[-1] if len(x_parent) != 0 else getattr(parent.gas, x)*x_scale
-                    p_y = y_parent[-1] if len(y_parent) != 0 else getattr(parent.gas, y)*y_scale
+                    p_x = x_parent[-1] if len(x_parent) != 0 else getattr(parent.gas, x)*scale_x
+                    p_y = y_parent[-1] if len(y_parent) != 0 else getattr(parent.gas, y)*scale_y
                     # Connector
                     if len(stream.components) &gt; 0:
                         x_system.append(np.array([p_x, x_stream[0]]))
                         y_system.append(np.array([p_y, y_stream[0]]))
 
-                        connector_args = {&#39;color&#39;: subplot_defaults[&#39;color&#39;],
-                                          &#39;zorder&#39;: self.streams.index(stream),
-                                          &#39;plot_label&#39;: None,
-                                          &#39;x_label&#39;: None,
-                                          &#39;y_label&#39;: None,
-                                          &#39;marker&#39;: &#39;&#39;
-                                          }
+                        connector_args = {
+                            &#39;color&#39;: subplot_defaults[&#39;color&#39;],
+                            &#39;zorder&#39;: self.streams.index(stream),
+                            &#39;plot_label&#39;: None,
+                            &#39;label_x&#39;: None,
+                            &#39;label_y&#39;: None,
+                            &#39;marker&#39;: &#39;&#39;,
+                            &#39;zorder&#39;: 0
+                        }
 
                         if colorblind:
                             connector_args = {**connector_args}
@@ -1207,18 +1208,14 @@ class system(SUPERSET):
         y_system = np.array(y_system, dtype=&#39;object&#39;)[mask].tolist()
         plotters = np.array(plotters, dtype=&#39;object&#39;)[mask].tolist()
 
-        # 4. comparison call
-        #     - fig=None, ax=None -&gt; plot_cycle_graph -&gt; fig in **kwargs keys
-        #         - fig=None, ax=None -&gt; line, scatter
-        #             - line, scatter plot onto active figure, axis
-        comparison(x=x_system,
-                   y=y_system,
-                   f=plotters,
-                   legend_loc=(0.865, 0.425),
-                   autocolor=False,
-                   show=show,
-                   **{**kwargs, **defaults})
+        # 4. Plot all
+        for i, plotter in enumerate(plotters):
+            plotter(x_system[i], y_system[i], **{**kwargs, **defaults})
 
+        plt.legend()
+
+        plt.show()
+    
     def plot_T_p(self,
                  show=False,
                  plot_label=None,
@@ -1226,6 +1223,7 @@ class system(SUPERSET):
                  colorblind=False,
                  **kwargs
                  ):
+        warnings.warn(&#39;`&lt;stream or system&gt;.plot_T_p(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;V&#34;, &#34;y=p0&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
         &#34;&#34;&#34;
         Temperature-Pressure system plot.
         &#34;&#34;&#34;
@@ -1233,9 +1231,7 @@ class system(SUPERSET):
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
 
-        self.plot(x=&#39;p0&#39;, x_label=&#39;p$_0$ [kPa]&#39;,
-                  y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
-                  **{**args, **kwargs})
+        self.plot(x=&#39;p0&#39;, y=&#39;t0&#39;, **{**args, **kwargs})
 
     def plot_p_V(self,
                  show=False,
@@ -1243,6 +1239,7 @@ class system(SUPERSET):
                  color=colorscheme_one()[0],
                  colorblind=False,
                  **kwargs):
+        warnings.warn(&#39;`&lt;stream or system&gt;.plot_p_V(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;V&#34;, &#34;y=p0&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
         &#34;&#34;&#34;
         Pressure-Volume system plot.
         &#34;&#34;&#34;
@@ -1250,9 +1247,7 @@ class system(SUPERSET):
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
 
-        self.plot(x=&#39;V&#39;,  x_label=&#39;v$_0$ [m$^3$/n]&#39;,
-                  y=&#39;p0&#39;, y_label=&#39;p$_0$ [kPa]&#39;,
-                  **{**args, **kwargs})
+        self.plot(x=&#39;V&#39;, y=&#39;p0&#39;, **{**args, **kwargs})
 
     def plot_T_S(self,
                  show=False,
@@ -1260,6 +1255,7 @@ class system(SUPERSET):
                  color=colorscheme_one()[0],
                  colorblind=False,
                  **kwargs):
+        warnings.warn(&#39;`&lt;stream or system&gt;.plot_T_S(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;S&#34;, &#34;y=t0&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
         &#34;&#34;&#34;
         Temperature-Entropy system plot.
         &#34;&#34;&#34;
@@ -1267,9 +1263,7 @@ class system(SUPERSET):
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
 
-        self.plot(x=&#39;S&#39;,  x_label=&#39;$\Delta$S [kJ/K]&#39;,
-                  y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
-                  **{**args, **kwargs})
+        self.plot(x=&#39;S&#39;, y=&#39;t0&#39;, **{**args, **kwargs})
 
     def plot_H_p(self,
                  show=False,
@@ -1277,6 +1271,7 @@ class system(SUPERSET):
                  color=colorscheme_one()[0],
                  colorblind=False,
                  **kwargs):
+        warnings.warn(&#39;`&lt;stream or system&gt;.plot_H_p(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;p0&#34;, y=&#34;H&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
         &#34;&#34;&#34;
         Pressure-Enthalpy system plot.
         &#34;&#34;&#34;
@@ -1284,9 +1279,7 @@ class system(SUPERSET):
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
 
-        self.plot(x=&#39;p0&#39;, x_label=&#39;p$_0$ [kPa]&#39;,
-                  y=&#39;H&#39;,  y_label=&#39;H$_0$ [kJ]&#39;,
-                  **{**args, **kwargs})</code></pre>
+        self.plot(x=&#39;p0&#39;, y=&#39;H&#39;, **{**args, **kwargs})</code></pre>
 </details>
 </section>
 <section>
@@ -1298,150 +1291,6 @@ class system(SUPERSET):
 <section>
 <h2 class="section-title" id="header-classes">Classes</h2>
 <dl>
-<dt id="huracan.engine.SET"><code class="flex name class">
-<span>class <span class="ident">SET</span></span>
-</code></dt>
-<dd>
-<div class="desc"><p>Component set class</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">class SET(metaclass=constructor_SET):
-    &#34;&#34;&#34;
-    Component set class
-    &#34;&#34;&#34;
-    def __sub__(self, other):
-        &#34;&#34;&#34;
-        Set concatenation operator: &lt;set&gt; - &lt;component/set&gt;
-        &#34;&#34;&#34;
-        if isinstance(other, component):
-            self.add_component(other)
-            return self
-        if isinstance(other, SET):
-            return self.add_set(other)
-
-    &#34;&#34;&#34;
-    Superset takeover
-    &#34;&#34;&#34;
-    def superset_takeover(self):
-        &#34;&#34;&#34;
-        Superset takeover
-        ---------------
-
-        When a set (a stream) is integrated in a superset
-        (a system), all set methods with a homonimous
-        superset method are renamed as protected
-        instance attributes, and their original names are
-        taken by pointers to the homonimous superset methods.
-        &#34;&#34;&#34;
-
-        special = r&#39;^__(.*?)\__$&#39;
-
-        def takeover(obj, method):
-            if hasattr(obj.superset, method):
-                return getattr(obj.superset, method)
-            else:
-                return getattr(obj, &#39;_&#39; + method)
-
-        for k in dir(self):
-            v = getattr(self, k)
-            # If the attribute k is:
-            #    - a method
-            #    - which is not special
-            #    - whose name is the name of another method in the stream&#39;s system
-            if isinstance(v, types.MethodType) and not re.match(special, k) and k in dir(self.superset):
-                if not hasattr(self, &#39;_&#39; + k):
-                    # Create private method
-                    setattr(self, &#39;_&#39; + k, v)
-                # Replace public method by takeover
-                setattr(self, k, takeover(self, k))</code></pre>
-</details>
-<h3>Subclasses</h3>
-<ul class="hlist">
-<li><a title="huracan.engine.stream" href="#huracan.engine.stream">stream</a></li>
-</ul>
-<h3>Methods</h3>
-<dl>
-<dt id="huracan.engine.SET.superset_takeover"><code class="name flex">
-<span>def <span class="ident">superset_takeover</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"><h2 id="superset-takeover">Superset Takeover</h2>
-<p>When a set (a stream) is integrated in a superset
-(a system), all set methods with a homonimous
-superset method are renamed as protected
-instance attributes, and their original names are
-taken by pointers to the homonimous superset methods.</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def superset_takeover(self):
-    &#34;&#34;&#34;
-    Superset takeover
-    ---------------
-
-    When a set (a stream) is integrated in a superset
-    (a system), all set methods with a homonimous
-    superset method are renamed as protected
-    instance attributes, and their original names are
-    taken by pointers to the homonimous superset methods.
-    &#34;&#34;&#34;
-
-    special = r&#39;^__(.*?)\__$&#39;
-
-    def takeover(obj, method):
-        if hasattr(obj.superset, method):
-            return getattr(obj.superset, method)
-        else:
-            return getattr(obj, &#39;_&#39; + method)
-
-    for k in dir(self):
-        v = getattr(self, k)
-        # If the attribute k is:
-        #    - a method
-        #    - which is not special
-        #    - whose name is the name of another method in the stream&#39;s system
-        if isinstance(v, types.MethodType) and not re.match(special, k) and k in dir(self.superset):
-            if not hasattr(self, &#39;_&#39; + k):
-                # Create private method
-                setattr(self, &#39;_&#39; + k, v)
-            # Replace public method by takeover
-            setattr(self, k, takeover(self, k))</code></pre>
-</details>
-</dd>
-</dl>
-</dd>
-<dt id="huracan.engine.SUPERSET"><code class="flex name class">
-<span>class <span class="ident">SUPERSET</span></span>
-</code></dt>
-<dd>
-<div class="desc"><p>Component superset class</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">class SUPERSET(metaclass=constructor_SUPERSET):
-    &#34;&#34;&#34;
-    Component superset class
-    &#34;&#34;&#34;
-    def __call__(self, *args):
-        &#34;&#34;&#34;
-        Superset set addition operator: &lt;superset&gt;(&lt;list of sets&gt;)
-
-        The gobble function must be implemented by the superset
-        child class (system).
-
-        :type args: set
-        &#34;&#34;&#34;
-        self.gobble(list(args))</code></pre>
-</details>
-<h3>Subclasses</h3>
-<ul class="hlist">
-<li><a title="huracan.engine.system" href="#huracan.engine.system">system</a></li>
-</ul>
-</dd>
 <dt id="huracan.engine.component"><code class="flex name class">
 <span>class <span class="ident">component</span></span>
 </code></dt>
@@ -1480,16 +1329,17 @@ taken by pointers to the homonimous superset methods.</p></div>
 </details>
 <h3>Subclasses</h3>
 <ul class="hlist">
+<li><a title="huracan.components.channels.bleed_duct" href="components/channels.html#huracan.components.channels.bleed_duct">bleed_duct</a></li>
+<li><a title="huracan.components.channels.intake" href="components/channels.html#huracan.components.channels.intake">intake</a></li>
+<li><a title="huracan.components.channels.nozzle" href="components/channels.html#huracan.components.channels.nozzle">nozzle</a></li>
 <li><a title="huracan.components.heat_exchangers.heat_sink" href="components/heat_exchangers.html#huracan.components.heat_exchangers.heat_sink">heat_sink</a></li>
 <li><a title="huracan.components.power.combustion.combustor" href="components/power/combustion.html#huracan.components.power.combustion.combustor">combustor</a></li>
 <li><a title="huracan.components.power.sinks.electrical_system" href="components/power/sinks.html#huracan.components.power.sinks.electrical_system">electrical_system</a></li>
 <li><a title="huracan.components.rotary.screw" href="components/rotary.html#huracan.components.rotary.screw">screw</a></li>
-<li><a title="huracan.components.static.intake" href="components/static.html#huracan.components.static.intake">intake</a></li>
-<li><a title="huracan.components.static.nozzle" href="components/static.html#huracan.components.static.nozzle">nozzle</a></li>
 </ul>
 </dd>
-<dt id="huracan.engine.constructor_SET"><code class="flex name class">
-<span>class <span class="ident">constructor_SET</span></span>
+<dt id="huracan.engine.component_set_constructor"><code class="flex name class">
+<span>class <span class="ident">component_set_constructor</span></span>
 <span>(</span><span>*args, **kwargs)</span>
 </code></dt>
 <dd>
@@ -1499,7 +1349,7 @@ taken by pointers to the homonimous superset methods.</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">class constructor_SET(type):
+<pre><code class="python">class component_set_constructor(type):
     &#34;&#34;&#34;
     Set metaclass
     -------------
@@ -1508,9 +1358,9 @@ taken by pointers to the homonimous superset methods.</p></div>
     &#34;&#34;&#34;
     def __new__(mcs, name, bases, body):
 
-        for i in [&#39;add_component&#39;, &#39;add_set&#39;]:
-            if name != mcs.__name__.split(&#39;_&#39;)[1] and i not in body:
-                raise TypeError(f&#39;SET class build error: {i} method must be implemented in SET child classes.&#39;)
+        for method in [&#39;add_component&#39;, &#39;add_set&#39;]:
+            if method not in body:
+                raise TypeError(f&#39;set_of_components class build error: {method} method must be implemented in set_of_components child classes.&#39;)
 
         return super().__new__(mcs, name, bases, body)</code></pre>
 </details>
@@ -1519,36 +1369,145 @@ taken by pointers to the homonimous superset methods.</p></div>
 <li>builtins.type</li>
 </ul>
 </dd>
-<dt id="huracan.engine.constructor_SUPERSET"><code class="flex name class">
-<span>class <span class="ident">constructor_SUPERSET</span></span>
-<span>(</span><span>*args, **kwargs)</span>
+<dt id="huracan.engine.set_of_components"><code class="flex name class">
+<span>class <span class="ident">set_of_components</span></span>
 </code></dt>
 <dd>
-<div class="desc"><h2 id="superset-metaclass">Superset Metaclass</h2>
-<p>Ensure all necessary methods are implemented in child classes.</p></div>
+<div class="desc"><p>Component set class</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">class constructor_SUPERSET(type):
+<pre><code class="python">class set_of_components:
     &#34;&#34;&#34;
-    Superset metaclass
-    ------------------
-
-    Ensure all necessary methods are implemented in child classes.
+    Component set class
     &#34;&#34;&#34;
-    def __new__(mcs, name, bases, body):
+    def __sub__(self, other):
+        &#34;&#34;&#34;
+        Set concatenation operator: &lt;set&gt; - &lt;component/set&gt;
+        &#34;&#34;&#34;
+        if isinstance(other, component):
+            self.add_component(other)
+            return self
+        if isinstance(other, set_of_components):
+            return self.add_set(other)
 
-        for i in [&#39;gobble&#39;]:
-            if name != mcs.__name__.split(&#39;_&#39;)[1] and i not in body:
-                if i not in body:
-                    raise TypeError(f&#39;SUPERSET class build error: {i} method must be implemented in SUPERSET child classes.&#39;)
+    def integrate_in_system(self):
+        &#34;&#34;&#34;
+        Integrate stream in stream system
+        ---------------------------------
 
-        return super().__new__(mcs, name, bases, body)</code></pre>
+        When a set (a stream) is integrated in a superset
+        (a system), all set methods with a homonimous
+        superset method are renamed as protected
+        instance attributes, and their original names are
+        taken by pointers to the homonimous superset methods.
+        &#34;&#34;&#34;
+
+        special = r&#39;^__(.*?)\__$&#39;
+
+        def takeover(obj, method):
+            if hasattr(obj.superset, method):
+                return getattr(obj.superset, method)
+            else:
+                return getattr(obj, &#39;_&#39; + method)
+
+        for k in dir(self):
+            v = getattr(self, k)
+            # If the attribute k is:
+            #    - a method
+            #    - which is not special
+            #    - whose name is the name of another method in the stream&#39;s system
+            if isinstance(v, types.MethodType) and not re.match(special, k) and k in dir(self.superset):
+                if not hasattr(self, &#39;_&#39; + k):
+                    # Create private method
+                    setattr(self, &#39;_&#39; + k, v)
+                # Replace public method by takeover
+                setattr(self, k, takeover(self, k))</code></pre>
 </details>
-<h3>Ancestors</h3>
+<h3>Subclasses</h3>
 <ul class="hlist">
-<li>builtins.type</li>
+<li><a title="huracan.engine.stream" href="#huracan.engine.stream">stream</a></li>
+</ul>
+<h3>Methods</h3>
+<dl>
+<dt id="huracan.engine.set_of_components.integrate_in_system"><code class="name flex">
+<span>def <span class="ident">integrate_in_system</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><h2 id="integrate-stream-in-stream-system">Integrate Stream In Stream System</h2>
+<p>When a set (a stream) is integrated in a superset
+(a system), all set methods with a homonimous
+superset method are renamed as protected
+instance attributes, and their original names are
+taken by pointers to the homonimous superset methods.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def integrate_in_system(self):
+    &#34;&#34;&#34;
+    Integrate stream in stream system
+    ---------------------------------
+
+    When a set (a stream) is integrated in a superset
+    (a system), all set methods with a homonimous
+    superset method are renamed as protected
+    instance attributes, and their original names are
+    taken by pointers to the homonimous superset methods.
+    &#34;&#34;&#34;
+
+    special = r&#39;^__(.*?)\__$&#39;
+
+    def takeover(obj, method):
+        if hasattr(obj.superset, method):
+            return getattr(obj.superset, method)
+        else:
+            return getattr(obj, &#39;_&#39; + method)
+
+    for k in dir(self):
+        v = getattr(self, k)
+        # If the attribute k is:
+        #    - a method
+        #    - which is not special
+        #    - whose name is the name of another method in the stream&#39;s system
+        if isinstance(v, types.MethodType) and not re.match(special, k) and k in dir(self.superset):
+            if not hasattr(self, &#39;_&#39; + k):
+                # Create private method
+                setattr(self, &#39;_&#39; + k, v)
+            # Replace public method by takeover
+            setattr(self, k, takeover(self, k))</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+<dt id="huracan.engine.set_of_streams"><code class="flex name class">
+<span>class <span class="ident">set_of_streams</span></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Component superset class</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class set_of_streams:
+    &#34;&#34;&#34;
+    Component superset class
+    &#34;&#34;&#34;
+    def __call__(self, *args):
+        &#34;&#34;&#34;
+        Superset set addition operator: &lt;superset&gt;(&lt;list of sets&gt;)
+
+        The gobble function must be implemented by the superset
+        child class (system).
+
+        :type args: set
+        &#34;&#34;&#34;
+        self.gobble(list(args))</code></pre>
+</details>
+<h3>Subclasses</h3>
+<ul class="hlist">
+<li><a title="huracan.engine.system" href="#huracan.engine.system">system</a></li>
 </ul>
 </dd>
 <dt id="huracan.engine.shaft"><code class="flex name class">
@@ -1732,7 +1691,7 @@ float
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">class stream(SET):
+<pre><code class="python">class stream(set_of_components, metaclass=component_set_constructor):
     &#34;&#34;&#34;
     Stream
     ------
@@ -1787,7 +1746,7 @@ float
         self.gas = gas
         return self
 
-    def __mul__(self, other):                       # TODO: stream diversion
+    def __mul__(self, other):
         &#34;&#34;&#34;
         Stream diversion operator: &lt;stream&gt; * n     for n: 0 =&lt; float =&lt; 1
         &#34;&#34;&#34;
@@ -1843,8 +1802,8 @@ float
         assert hasattr(self, &#39;gas&#39;), &#39;The stream must have a gas attribute for&#39; \
                                      &#39;the stream diversion operation to be possible.&#39;
 
-        main = stream(self.gas, fr=fr, parents=[self])
-        div  = stream(self.gas, fr=1-fr, parents=[self])
+        main = stream(deepcopy(self.gas), fr=fr, parents=[self])
+        div  = stream(deepcopy(self.gas), fr=1-fr, parents=[self])
 
         # Stream ID
         main.stream_id[0] = self.stream_id[0] + 1
@@ -1901,22 +1860,8 @@ float
         if there are more than 1 components of the same class
         in the stream.
         &#34;&#34;&#34;
-        codes = {&#39;fan&#39;:                &#39;fn&#39;,
-                 &#39;prop&#39;:               &#39;pr&#39;,
-                 &#39;propfan&#39;:            &#39;pf&#39;,
-                 &#39;intake&#39;:             &#39;it&#39;,
-                 &#39;inlet&#39;:              &#39;il&#39;,
-                 &#39;compressor&#39;:         &#39;cp&#39;,
-                 &#39;combustion_chamber&#39;: &#39;cc&#39;,
-                 &#39;turbine&#39;:            &#39;tb&#39;,
-                 &#39;nozzle&#39;:             &#39;nz&#39;,
-
-                 &#39;intercooler&#39;:        &#39;ic&#39;,
-                 &#39;recuperator&#39;:        &#39;rc&#39;,
-                 &#39;afterburner&#39;:        &#39;ab&#39;,
-                 }
-
-        code = codes[c.__class__.__name__] + self.n_instances(c)
+        
+        code = component_codes[c.__class__.__name__] + self.n_instances(c)
 
         return f&#39;{&#34;.&#34;.join([str(c) for c in self.stream_id])}.{code}&#39;
 
@@ -1953,13 +1898,13 @@ float
 
         for c in self.components:
             section_name = join_set_distance(c.stage, c.__class__.__name__.capitalize().replace(&#34;_&#34;, &#34; &#34;), d)
-            print_color(section_name, &#39;green&#39;)
+            print(section_name)
 
             if c.__class__.__name__ == &#39;nozzle&#39;:
                 if c.choked:
-                    print_color(&#39; &#39;*d + &#39;Choked flow&#39;, &#39;red&#39;)
-            print_result(&#39; &#39;*(d+1) + &#39;T0&#39;, c.t0, &#39;[K]&#39;)
-            print_result(&#39; &#39;*(d+1) + &#39;p0&#39;, c.p0, &#39;[Pa]&#39;)
+                    print(&#39; &#39;*d + &#39;Choked flow&#39;)
+            print(f&#39;{&#34; &#34;*d} T0 {str(c.t0)[:10]} [K]&#39;)
+            print(f&#39;{&#34; &#34;*d} p0 {str(c.p0)[:10]} [Pa]&#39;)
 
     &#34;&#34;&#34;
     Stream runtime functions
@@ -1977,7 +1922,7 @@ float
         self.choked = False                                 # FIXME: choked flow implementation is ugly
 
         for c in self.components:
-            c(self.gas)                     # Run thermodynamic process on stream gas
+            c(self.gas)                    # Run thermodynamic process on stream gas
             c.stage = self.stage_name(c)   # Set component stage name
 
             if hasattr(c, &#39;choked&#39;) and c.choked:           # FIXME: ugly
@@ -2246,14 +2191,15 @@ float
              plot_label=None,
              color=colorscheme_one()[0],
              **kwargs):
+        warnings.warn(&#39;`&lt;stream or system&gt;.plot_T_S(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;S&#34;, &#34;y=t0&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
         &#34;&#34;&#34;
         Temperature-Entropy stream plot.
         &#34;&#34;&#34;
 
-        figure((9, 5))
+        plt.figure(figsize=(9, 5))
 
-        defaults = {&#39;x_label&#39;: &#39;$\Delta$S [kJ/K/n]&#39;,
-                    &#39;y_label&#39;: &#39;T$_0$ [K]&#39;,}
+        defaults = {&#39;label_x&#39;: r&#39;$\Delta$S [kJ/K/n]&#39;,
+                    &#39;label_y&#39;: r&#39;T$_0$ [K]&#39;,}
 
         further_custom = {**defaults, **kwargs}
 
@@ -2262,7 +2208,7 @@ float
                               plot_label=plot_label,
                               show=show,
                               # Further customization
-                              y_tick_ndecimals=2,
+                              tick_label_decimals_y=2,
                               **further_custom)
 
     def plot_p_V(self,
@@ -2270,14 +2216,15 @@ float
                  plot_label=None,
                  color=colorscheme_one()[0],
                  **kwargs):
+        warnings.warn(&#39;`&lt;stream or system&gt;.plot_p_V(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;V&#34;, &#34;y=p0&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
         &#34;&#34;&#34;
         Pressure-Volume stream plot.
         &#34;&#34;&#34;
 
-        figure((9, 5))
+        plt.figure(figsize=(9, 5))
 
-        defaults = {&#39;x_label&#39;: &#39;v$_0$ [m$^3$/n]&#39;,
-                    &#39;y_label&#39;: &#39;p$_0$ [kPa]&#39;}
+        defaults = {&#39;label_x&#39;: &#39;v$_0$ [m$^3$/n]&#39;,
+                    &#39;label_y&#39;: &#39;p$_0$ [kPa]&#39;}
 
         further_custom = {**defaults, **kwargs}
 
@@ -2286,7 +2233,7 @@ float
                               plot_label=plot_label,
                               show=show,
                               # Further customization
-                              y_tick_ndecimals=2,
+                              tick_label_decimals_y=2,
                               **further_custom)
 
     def plot_H_p(self,
@@ -2294,14 +2241,15 @@ float
                  plot_label=None,
                  color=colorscheme_one()[0],
                  **kwargs):
+        warnings.warn(&#39;`&lt;stream or system&gt;.plot_H_p(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;p0&#34;, y=&#34;H&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
         &#34;&#34;&#34;
         Pressure-Enthalpy stream plot.
         &#34;&#34;&#34;
 
-        figure((9, 5))
+        plt.figure(figsize=(9, 5))
 
-        defaults = {&#39;x_label&#39;: &#39;p$_0$ [kPa]&#39;,
-                    &#39;y_label&#39;: &#39;H$_0$ [kJ]&#39;,}
+        defaults = {&#39;label_x&#39;: &#39;p$_0$ [kPa]&#39;,
+                    &#39;label_y&#39;: &#39;H$_0$ [kJ]&#39;,}
 
         further_custom = {**defaults, **kwargs}
 
@@ -2310,7 +2258,7 @@ float
                               plot_label=plot_label,
                               show=show,
                               # Further customization
-                              y_tick_ndecimals=2,
+                              tick_label_decimals_y=2,
                               **further_custom)
 
     def plot_T_p(self,
@@ -2318,14 +2266,15 @@ float
              plot_label=None,
              color=colorscheme_one()[0],
              **kwargs):
+        warnings.warn(&#39;`&lt;stream or system&gt;.plot_T_p(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;V&#34;, &#34;y=p0&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
         &#34;&#34;&#34;
         Temperature-Pressure system plot.
         &#34;&#34;&#34;
 
-        figure((9, 5))
+        plt.figure(figsize=(9, 5))
 
-        defaults = {&#39;x_label&#39;: &#39;p$_0$ [kPa]&#39;,
-                    &#39;y_label&#39;: &#39;T$_0$ [K]&#39;}
+        defaults = {&#39;label_x&#39;: &#39;p$_0$ [kPa]&#39;,
+                    &#39;label_y&#39;: &#39;T$_0$ [K]&#39;}
 
         further_custom = {**defaults, **kwargs}
 
@@ -2334,13 +2283,48 @@ float
                               plot_label=plot_label,
                               show=show,
                               # Further customization
-                              x_tick_ndecimals=2,
+                              tick_label_decimals_x=2,
                               **further_custom)
+
+    def plot(self, 
+             x, y,
+             show=False,
+             plot_label=None,
+             color=colorscheme_one()[0],
+             **kwargs):
+        &#34;&#34;&#34;
+        Create a cycle plot of two physical quantities of the stream.
+        &#34;&#34;&#34;
+
+        name_x_default, label_x_default, scale_x_default = physical_quantities[x]
+        name_y_default, label_y_default, scale_y_default = physical_quantities[y]
+
+        scale_x = scale_x_default if isinstance(scale_x, type(None)) else scale_x
+        scale_y = scale_y_default if isinstance(scale_y, type(None)) else scale_y
+        label_x = label_x_default if isinstance(label_x, type(None)) else label_x
+        label_y = label_y_default if isinstance(label_y, type(None)) else label_y
+
+        x = getattr(self, x) * scale_x
+        y = getattr(self, y) * scale_y
+
+        defaults = {&#39;label_x&#39;: label_x,
+                    &#39;label_y&#39;: label_y}
+
+        further_custom = {**defaults, **kwargs}
+
+        self.plot_cycle_graph(
+            x, y,
+            color=color,
+            plot_label=plot_label,
+            show=show,
+            # Further customization
+            tick_label_decimals_x=2,
+            **further_custom)
 
     def plot_cycle_graph(self,
                          x, y,
                          plot_label,
-                         x_label, y_label,
+                         label_x, label_y,
                          color=colorscheme_one()[0],
                          show=False,
                          **kwargs
@@ -2351,52 +2335,33 @@ float
         The default arguments plus any valid MPL Plotter line plotting
         class arguments can be passed to this function.
         &#34;&#34;&#34;
+
         fig = kwargs.pop(&#39;fig&#39;, None)
 
-        defaults = {
-            # Specifics
-            &#39;point_size&#39;: 30,
-            # Markers
-            &#39;marker&#39;: &#39;x&#39;,
-            # Color
-            &#39;color&#39;: delta(color, -0.3),
-            # Arrangement
-            &#39;zorder&#39;: 2,
-            # Further customization
-            &#39;aspect&#39;: 1/2,
-            &#39;x_tick_number&#39;: 10,
-            &#39;y_tick_number&#39;: 10,
-            &#39;demo_pad_plot&#39;: True,
-            &#39;y_label_pad&#39;: 5,
-        }
+        plt.plot(x, y,
+            color=color,
+            marker=kwargs.get(&#39;marker&#39;, &#39;x&#39;), markeredgecolor=delta(color, -0.3), markersize=8, markeredgewidth=2, markerfacecolor=kwargs.get(&#39;facecolors&#39;, color),
+            label=plot_label,
+            zorder=kwargs.get(&#39;zorder&#39;, 0) + 2.5,
+        )
+        plt.scatter(x, y,
+            marker=kwargs.get(&#39;marker&#39;, &#39;x&#39;), s=55,
+            edgecolor=delta(color, -0.3), linewidth=1.5, 
+            facecolor=kwargs.get(&#39;facecolors&#39;, color),
+            zorder=kwargs.get(&#39;zorder&#39;, 0) + 1e2,
+        )
 
-        further_custom = {**defaults, **kwargs}
+        ax = plt.gca()
 
-        # Connecting lines
-        line(   x=x, y=y,
-                # Figure
-                fig=fig,
-                # Specifics
-                line_width=1,
-                # Color
-                color=color, alpha=0.65,
-                # Arrangement
-                zorder=1,
-                )
-        # Stages
-        scatter(x=x, y=y,
-                # Figure
-                fig=fig,
-                # Further customization
-                plot_label=plot_label,
-                x_label=x_label,
-                y_label=y_label,
-                show=show,
-                **further_custom)</code></pre>
+        if label_x is not None: ax.set_xlabel(label_x)
+        if label_y is not None: ax.set_ylabel(label_y)
+
+        if show:
+            plt.show()</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
-<li><a title="huracan.engine.SET" href="#huracan.engine.SET">SET</a></li>
+<li><a title="huracan.engine.set_of_components" href="#huracan.engine.set_of_components">set_of_components</a></li>
 </ul>
 <h3>Methods</h3>
 <dl>
@@ -2583,8 +2548,8 @@ float
     assert hasattr(self, &#39;gas&#39;), &#39;The stream must have a gas attribute for&#39; \
                                  &#39;the stream diversion operation to be possible.&#39;
 
-    main = stream(self.gas, fr=fr, parents=[self])
-    div  = stream(self.gas, fr=1-fr, parents=[self])
+    main = stream(deepcopy(self.gas), fr=fr, parents=[self])
+    div  = stream(deepcopy(self.gas), fr=1-fr, parents=[self])
 
     # Stream ID
     main.stream_id[0] = self.stream_id[0] + 1
@@ -2711,13 +2676,13 @@ float
 
     for c in self.components:
         section_name = join_set_distance(c.stage, c.__class__.__name__.capitalize().replace(&#34;_&#34;, &#34; &#34;), d)
-        print_color(section_name, &#39;green&#39;)
+        print(section_name)
 
         if c.__class__.__name__ == &#39;nozzle&#39;:
             if c.choked:
-                print_color(&#39; &#39;*d + &#39;Choked flow&#39;, &#39;red&#39;)
-        print_result(&#39; &#39;*(d+1) + &#39;T0&#39;, c.t0, &#39;[K]&#39;)
-        print_result(&#39; &#39;*(d+1) + &#39;p0&#39;, c.p0, &#39;[Pa]&#39;)</code></pre>
+                print(&#39; &#39;*d + &#39;Choked flow&#39;)
+        print(f&#39;{&#34; &#34;*d} T0 {str(c.t0)[:10]} [K]&#39;)
+        print(f&#39;{&#34; &#34;*d} p0 {str(c.p0)[:10]} [Pa]&#39;)</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.merge"><code class="name flex">
@@ -2806,11 +2771,56 @@ parent class in the stream (n &gt; 1):
     return np.array([c.p0 for c in self.components])</code></pre>
 </details>
 </dd>
+<dt id="huracan.engine.stream.plot"><code class="name flex">
+<span>def <span class="ident">plot</span></span>(<span>self, x, y, show=False, plot_label=None, color='darkred', **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Create a cycle plot of two physical quantities of the stream.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def plot(self, 
+         x, y,
+         show=False,
+         plot_label=None,
+         color=colorscheme_one()[0],
+         **kwargs):
+    &#34;&#34;&#34;
+    Create a cycle plot of two physical quantities of the stream.
+    &#34;&#34;&#34;
+
+    name_x_default, label_x_default, scale_x_default = physical_quantities[x]
+    name_y_default, label_y_default, scale_y_default = physical_quantities[y]
+
+    scale_x = scale_x_default if isinstance(scale_x, type(None)) else scale_x
+    scale_y = scale_y_default if isinstance(scale_y, type(None)) else scale_y
+    label_x = label_x_default if isinstance(label_x, type(None)) else label_x
+    label_y = label_y_default if isinstance(label_y, type(None)) else label_y
+
+    x = getattr(self, x) * scale_x
+    y = getattr(self, y) * scale_y
+
+    defaults = {&#39;label_x&#39;: label_x,
+                &#39;label_y&#39;: label_y}
+
+    further_custom = {**defaults, **kwargs}
+
+    self.plot_cycle_graph(
+        x, y,
+        color=color,
+        plot_label=plot_label,
+        show=show,
+        # Further customization
+        tick_label_decimals_x=2,
+        **further_custom)</code></pre>
+</details>
+</dd>
 <dt id="huracan.engine.stream.plot_H_p"><code class="name flex">
 <span>def <span class="ident">plot_H_p</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Pressure-Enthalpy stream plot.</p></div>
+<div class="desc"></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -2820,14 +2830,15 @@ parent class in the stream (n &gt; 1):
              plot_label=None,
              color=colorscheme_one()[0],
              **kwargs):
+    warnings.warn(&#39;`&lt;stream or system&gt;.plot_H_p(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;p0&#34;, y=&#34;H&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
     &#34;&#34;&#34;
     Pressure-Enthalpy stream plot.
     &#34;&#34;&#34;
 
-    figure((9, 5))
+    plt.figure(figsize=(9, 5))
 
-    defaults = {&#39;x_label&#39;: &#39;p$_0$ [kPa]&#39;,
-                &#39;y_label&#39;: &#39;H$_0$ [kJ]&#39;,}
+    defaults = {&#39;label_x&#39;: &#39;p$_0$ [kPa]&#39;,
+                &#39;label_y&#39;: &#39;H$_0$ [kJ]&#39;,}
 
     further_custom = {**defaults, **kwargs}
 
@@ -2836,7 +2847,7 @@ parent class in the stream (n &gt; 1):
                           plot_label=plot_label,
                           show=show,
                           # Further customization
-                          y_tick_ndecimals=2,
+                          tick_label_decimals_y=2,
                           **further_custom)</code></pre>
 </details>
 </dd>
@@ -2844,7 +2855,7 @@ parent class in the stream (n &gt; 1):
 <span>def <span class="ident">plot_T_S</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Temperature-Entropy stream plot.</p></div>
+<div class="desc"></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -2854,14 +2865,15 @@ parent class in the stream (n &gt; 1):
          plot_label=None,
          color=colorscheme_one()[0],
          **kwargs):
+    warnings.warn(&#39;`&lt;stream or system&gt;.plot_T_S(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;S&#34;, &#34;y=t0&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
     &#34;&#34;&#34;
     Temperature-Entropy stream plot.
     &#34;&#34;&#34;
 
-    figure((9, 5))
+    plt.figure(figsize=(9, 5))
 
-    defaults = {&#39;x_label&#39;: &#39;$\Delta$S [kJ/K/n]&#39;,
-                &#39;y_label&#39;: &#39;T$_0$ [K]&#39;,}
+    defaults = {&#39;label_x&#39;: r&#39;$\Delta$S [kJ/K/n]&#39;,
+                &#39;label_y&#39;: r&#39;T$_0$ [K]&#39;,}
 
     further_custom = {**defaults, **kwargs}
 
@@ -2870,7 +2882,7 @@ parent class in the stream (n &gt; 1):
                           plot_label=plot_label,
                           show=show,
                           # Further customization
-                          y_tick_ndecimals=2,
+                          tick_label_decimals_y=2,
                           **further_custom)</code></pre>
 </details>
 </dd>
@@ -2878,7 +2890,7 @@ parent class in the stream (n &gt; 1):
 <span>def <span class="ident">plot_T_p</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Temperature-Pressure system plot.</p></div>
+<div class="desc"></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -2888,14 +2900,15 @@ parent class in the stream (n &gt; 1):
          plot_label=None,
          color=colorscheme_one()[0],
          **kwargs):
+    warnings.warn(&#39;`&lt;stream or system&gt;.plot_T_p(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;V&#34;, &#34;y=p0&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
     &#34;&#34;&#34;
     Temperature-Pressure system plot.
     &#34;&#34;&#34;
 
-    figure((9, 5))
+    plt.figure(figsize=(9, 5))
 
-    defaults = {&#39;x_label&#39;: &#39;p$_0$ [kPa]&#39;,
-                &#39;y_label&#39;: &#39;T$_0$ [K]&#39;}
+    defaults = {&#39;label_x&#39;: &#39;p$_0$ [kPa]&#39;,
+                &#39;label_y&#39;: &#39;T$_0$ [K]&#39;}
 
     further_custom = {**defaults, **kwargs}
 
@@ -2904,12 +2917,12 @@ parent class in the stream (n &gt; 1):
                           plot_label=plot_label,
                           show=show,
                           # Further customization
-                          x_tick_ndecimals=2,
+                          tick_label_decimals_x=2,
                           **further_custom)</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.plot_cycle_graph"><code class="name flex">
-<span>def <span class="ident">plot_cycle_graph</span></span>(<span>self, x, y, plot_label, x_label, y_label, color='darkred', show=False, **kwargs)</span>
+<span>def <span class="ident">plot_cycle_graph</span></span>(<span>self, x, y, plot_label, label_x, label_y, color='darkred', show=False, **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>General plot composed of an MPL Plotter line and scatter plot.</p>
@@ -2922,7 +2935,7 @@ class arguments can be passed to this function.</p></div>
 <pre><code class="python">def plot_cycle_graph(self,
                      x, y,
                      plot_label,
-                     x_label, y_label,
+                     label_x, label_y,
                      color=colorscheme_one()[0],
                      show=False,
                      **kwargs
@@ -2933,55 +2946,36 @@ class arguments can be passed to this function.</p></div>
     The default arguments plus any valid MPL Plotter line plotting
     class arguments can be passed to this function.
     &#34;&#34;&#34;
+
     fig = kwargs.pop(&#39;fig&#39;, None)
 
-    defaults = {
-        # Specifics
-        &#39;point_size&#39;: 30,
-        # Markers
-        &#39;marker&#39;: &#39;x&#39;,
-        # Color
-        &#39;color&#39;: delta(color, -0.3),
-        # Arrangement
-        &#39;zorder&#39;: 2,
-        # Further customization
-        &#39;aspect&#39;: 1/2,
-        &#39;x_tick_number&#39;: 10,
-        &#39;y_tick_number&#39;: 10,
-        &#39;demo_pad_plot&#39;: True,
-        &#39;y_label_pad&#39;: 5,
-    }
+    plt.plot(x, y,
+        color=color,
+        marker=kwargs.get(&#39;marker&#39;, &#39;x&#39;), markeredgecolor=delta(color, -0.3), markersize=8, markeredgewidth=2, markerfacecolor=kwargs.get(&#39;facecolors&#39;, color),
+        label=plot_label,
+        zorder=kwargs.get(&#39;zorder&#39;, 0) + 2.5,
+    )
+    plt.scatter(x, y,
+        marker=kwargs.get(&#39;marker&#39;, &#39;x&#39;), s=55,
+        edgecolor=delta(color, -0.3), linewidth=1.5, 
+        facecolor=kwargs.get(&#39;facecolors&#39;, color),
+        zorder=kwargs.get(&#39;zorder&#39;, 0) + 1e2,
+    )
 
-    further_custom = {**defaults, **kwargs}
+    ax = plt.gca()
 
-    # Connecting lines
-    line(   x=x, y=y,
-            # Figure
-            fig=fig,
-            # Specifics
-            line_width=1,
-            # Color
-            color=color, alpha=0.65,
-            # Arrangement
-            zorder=1,
-            )
-    # Stages
-    scatter(x=x, y=y,
-            # Figure
-            fig=fig,
-            # Further customization
-            plot_label=plot_label,
-            x_label=x_label,
-            y_label=y_label,
-            show=show,
-            **further_custom)</code></pre>
+    if label_x is not None: ax.set_xlabel(label_x)
+    if label_y is not None: ax.set_ylabel(label_y)
+
+    if show:
+        plt.show()</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.stream.plot_p_V"><code class="name flex">
 <span>def <span class="ident">plot_p_V</span></span>(<span>self, show=False, plot_label=None, color='darkred', **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Pressure-Volume stream plot.</p></div>
+<div class="desc"></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -2991,14 +2985,15 @@ class arguments can be passed to this function.</p></div>
              plot_label=None,
              color=colorscheme_one()[0],
              **kwargs):
+    warnings.warn(&#39;`&lt;stream or system&gt;.plot_p_V(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;V&#34;, &#34;y=p0&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
     &#34;&#34;&#34;
     Pressure-Volume stream plot.
     &#34;&#34;&#34;
 
-    figure((9, 5))
+    plt.figure(figsize=(9, 5))
 
-    defaults = {&#39;x_label&#39;: &#39;v$_0$ [m$^3$/n]&#39;,
-                &#39;y_label&#39;: &#39;p$_0$ [kPa]&#39;}
+    defaults = {&#39;label_x&#39;: &#39;v$_0$ [m$^3$/n]&#39;,
+                &#39;label_y&#39;: &#39;p$_0$ [kPa]&#39;}
 
     further_custom = {**defaults, **kwargs}
 
@@ -3007,7 +3002,7 @@ class arguments can be passed to this function.</p></div>
                           plot_label=plot_label,
                           show=show,
                           # Further customization
-                          y_tick_ndecimals=2,
+                          tick_label_decimals_y=2,
                           **further_custom)</code></pre>
 </details>
 </dd>
@@ -3092,7 +3087,7 @@ on the instance's gas class instance.</p></div>
     self.choked = False                                 # FIXME: choked flow implementation is ugly
 
     for c in self.components:
-        c(self.gas)                     # Run thermodynamic process on stream gas
+        c(self.gas)                    # Run thermodynamic process on stream gas
         c.stage = self.stage_name(c)   # Set component stage name
 
         if hasattr(c, &#39;choked&#39;) and c.choked:           # FIXME: ugly
@@ -3163,22 +3158,8 @@ in the stream.</p></div>
     if there are more than 1 components of the same class
     in the stream.
     &#34;&#34;&#34;
-    codes = {&#39;fan&#39;:                &#39;fn&#39;,
-             &#39;prop&#39;:               &#39;pr&#39;,
-             &#39;propfan&#39;:            &#39;pf&#39;,
-             &#39;intake&#39;:             &#39;it&#39;,
-             &#39;inlet&#39;:              &#39;il&#39;,
-             &#39;compressor&#39;:         &#39;cp&#39;,
-             &#39;combustion_chamber&#39;: &#39;cc&#39;,
-             &#39;turbine&#39;:            &#39;tb&#39;,
-             &#39;nozzle&#39;:             &#39;nz&#39;,
-
-             &#39;intercooler&#39;:        &#39;ic&#39;,
-             &#39;recuperator&#39;:        &#39;rc&#39;,
-             &#39;afterburner&#39;:        &#39;ab&#39;,
-             }
-
-    code = codes[c.__class__.__name__] + self.n_instances(c)
+    
+    code = component_codes[c.__class__.__name__] + self.n_instances(c)
 
     return f&#39;{&#34;.&#34;.join([str(c) for c in self.stream_id])}.{code}&#39;</code></pre>
 </details>
@@ -3354,11 +3335,42 @@ exit.</p></div>
 </dl>
 <h3>Inherited members</h3>
 <ul class="hlist">
-<li><code><b><a title="huracan.engine.SET" href="#huracan.engine.SET">SET</a></b></code>:
+<li><code><b><a title="huracan.engine.set_of_components" href="#huracan.engine.set_of_components">set_of_components</a></b></code>:
 <ul class="hlist">
-<li><code><a title="huracan.engine.SET.superset_takeover" href="#huracan.engine.SET.superset_takeover">superset_takeover</a></code></li>
+<li><code><a title="huracan.engine.set_of_components.integrate_in_system" href="#huracan.engine.set_of_components.integrate_in_system">integrate_in_system</a></code></li>
 </ul>
 </li>
+</ul>
+</dd>
+<dt id="huracan.engine.stream_set_constructor"><code class="flex name class">
+<span>class <span class="ident">stream_set_constructor</span></span>
+<span>(</span><span>*args, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><h2 id="superset-metaclass">Superset Metaclass</h2>
+<p>Ensure all necessary methods are implemented in child classes.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class stream_set_constructor(type):
+    &#34;&#34;&#34;
+    Superset metaclass
+    ------------------
+
+    Ensure all necessary methods are implemented in child classes.
+    &#34;&#34;&#34;
+    def __new__(mcs, name, bases, body):
+
+        for method in [&#39;gobble&#39;]:
+            if method not in body:
+                raise TypeError(f&#39;set_of_streams class build error: {method} method must be implemented in set_of_streams child classes.&#39;)
+
+        return super().__new__(mcs, name, bases, body)</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>builtins.type</li>
 </ul>
 </dd>
 <dt id="huracan.engine.system"><code class="flex name class">
@@ -3373,7 +3385,7 @@ exit.</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">class system(SUPERSET):
+<pre><code class="python">class system(set_of_streams, metaclass=stream_set_constructor):
     &#34;&#34;&#34;
     System
     ------
@@ -3415,7 +3427,7 @@ exit.</p></div>
         for s in streams:
             self.streams.append(s)
             s.superset = s.system = self
-            s.superset_takeover()
+            s.integrate_in_system()
 
     def retrieve(self, item):
         &#34;&#34;&#34;
@@ -3562,8 +3574,8 @@ exit.</p></div>
     &#34;&#34;&#34;
     def plot(self,
              x, y,
-             x_scale=None, y_scale=None,
-             x_label=None, y_label=None,
+             scale_x=None, scale_y=None,
+             label_x=None, label_y=None,
              show=False,
              plot_label=None,                  # When called from a _system_takeover the plot_label and color
              color=colorscheme_one()[0],       # arguments are passed to the function, but disregarded.
@@ -3587,41 +3599,42 @@ exit.</p></div>
                 - fig=None, ax=None -&gt; line, scatter
                     - line, scatter plot onto active figure, axis
 
-        :param x_scale: Scaling factor.
-        :param y_scale: Scaling factor.
+        :param scale_x: Scaling factor.
+        :param scale_y: Scaling factor.
 
         :type x:        str
         :type y:        str
-        :type x_scale:  float
-        :type y_scale:  float
+        :type scale_x:  float
+        :type scale_y:  float
         &#34;&#34;&#34;
+
         plotters   = []
         x_system   = []
         y_system   = []
 
         defaults   = {&#39;legend&#39;: kwargs.pop(&#39;legend&#39;, True)}
 
-        scales     = {&#39;t0&#39;: 1,
-                      &#39;p0&#39;: 1/1000,
-                      &#39;V&#39;:  1,
-                      &#39;S&#39;:  1/1000,
-                      &#39;H&#39;:  1/1000}
-        x_scale    = scales[x] if isinstance(x_scale, type(None)) else x_scale
-        y_scale    = scales[y] if isinstance(y_scale, type(None)) else y_scale
+        name_x_default, label_x_default, scale_x_default = physical_quantities[x]
+        name_y_default, label_y_default, scale_y_default = physical_quantities[y]
+
+        scale_x    = scale_x_default if isinstance(scale_x, type(None)) else scale_x
+        scale_y    = scale_y_default if isinstance(scale_y, type(None)) else scale_y
+        label_x    = label_x_default if isinstance(label_x, type(None)) else label_x
+        label_y    = label_y_default if isinstance(label_y, type(None)) else label_y
 
         # 1. Create figure
-        figure((9, 5))
+        plt.figure(figsize=(9, 5))
 
         # 2. Create state variable and plotters vectors
-        for stream in self.streams:
+        for i, stream in enumerate(self.streams):
 
             # Plot defaults
             subplot_defaults = {
                 &#39;plot_label&#39;: f&#39;{&#34;.&#34;.join([str(c) for c in stream.stream_id])}&#39;,
-                &#39;x_label&#39;: x_label,
-                &#39;y_label&#39;: y_label,
+                &#39;label_x&#39;: label_x,
+                &#39;label_y&#39;: label_y,
                 &#39;color&#39;: colorscheme_one()[self.streams.index(stream)],
-                &#39;zorder&#39;: self.streams.index(stream),
+                &#39;zorder&#39;: self.streams.index(stream)
             }
 
             if colorblind:
@@ -3632,13 +3645,13 @@ exit.</p></div>
             def gen_plotter(**defaults):
                 &#34;&#34;&#34;
                 Returns a plotter using the defaults.
-                Any keyword arguemnts passed to the
+                Any keyword arguments passed to the
                 _plot function overwrite the defaults.
                 &#34;&#34;&#34;
                 return lambda x, y, **kwargs: stream.plot_cycle_graph(x=x, y=y, **{**defaults, **kwargs})
 
-            x_stream = getattr(stream, x)()*x_scale
-            y_stream = getattr(stream, y)()*y_scale
+            x_stream = getattr(stream, x)()*scale_x
+            y_stream = getattr(stream, y)()*scale_y
 
             plotters.append(gen_plotter(**subplot_defaults))
             x_system.append(x_stream)
@@ -3647,23 +3660,25 @@ exit.</p></div>
             # 2.1 Parent connectors
             if hasattr(stream, &#39;parents&#39;):
                 for parent in stream.parents:
-                    x_parent = getattr(parent, x)()*x_scale
-                    y_parent = getattr(parent, y)()*y_scale
+                    x_parent = getattr(parent, x)()*scale_x
+                    y_parent = getattr(parent, y)()*scale_y
                     # If the parent stream has no stages, get parent stream&#39;s gas state
-                    p_x = x_parent[-1] if len(x_parent) != 0 else getattr(parent.gas, x)*x_scale
-                    p_y = y_parent[-1] if len(y_parent) != 0 else getattr(parent.gas, y)*y_scale
+                    p_x = x_parent[-1] if len(x_parent) != 0 else getattr(parent.gas, x)*scale_x
+                    p_y = y_parent[-1] if len(y_parent) != 0 else getattr(parent.gas, y)*scale_y
                     # Connector
                     if len(stream.components) &gt; 0:
                         x_system.append(np.array([p_x, x_stream[0]]))
                         y_system.append(np.array([p_y, y_stream[0]]))
 
-                        connector_args = {&#39;color&#39;: subplot_defaults[&#39;color&#39;],
-                                          &#39;zorder&#39;: self.streams.index(stream),
-                                          &#39;plot_label&#39;: None,
-                                          &#39;x_label&#39;: None,
-                                          &#39;y_label&#39;: None,
-                                          &#39;marker&#39;: &#39;&#39;
-                                          }
+                        connector_args = {
+                            &#39;color&#39;: subplot_defaults[&#39;color&#39;],
+                            &#39;zorder&#39;: self.streams.index(stream),
+                            &#39;plot_label&#39;: None,
+                            &#39;label_x&#39;: None,
+                            &#39;label_y&#39;: None,
+                            &#39;marker&#39;: &#39;&#39;,
+                            &#39;zorder&#39;: 0
+                        }
 
                         if colorblind:
                             connector_args = {**connector_args}
@@ -3679,18 +3694,14 @@ exit.</p></div>
         y_system = np.array(y_system, dtype=&#39;object&#39;)[mask].tolist()
         plotters = np.array(plotters, dtype=&#39;object&#39;)[mask].tolist()
 
-        # 4. comparison call
-        #     - fig=None, ax=None -&gt; plot_cycle_graph -&gt; fig in **kwargs keys
-        #         - fig=None, ax=None -&gt; line, scatter
-        #             - line, scatter plot onto active figure, axis
-        comparison(x=x_system,
-                   y=y_system,
-                   f=plotters,
-                   legend_loc=(0.865, 0.425),
-                   autocolor=False,
-                   show=show,
-                   **{**kwargs, **defaults})
+        # 4. Plot all
+        for i, plotter in enumerate(plotters):
+            plotter(x_system[i], y_system[i], **{**kwargs, **defaults})
 
+        plt.legend()
+
+        plt.show()
+    
     def plot_T_p(self,
                  show=False,
                  plot_label=None,
@@ -3698,6 +3709,7 @@ exit.</p></div>
                  colorblind=False,
                  **kwargs
                  ):
+        warnings.warn(&#39;`&lt;stream or system&gt;.plot_T_p(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;V&#34;, &#34;y=p0&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
         &#34;&#34;&#34;
         Temperature-Pressure system plot.
         &#34;&#34;&#34;
@@ -3705,9 +3717,7 @@ exit.</p></div>
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
 
-        self.plot(x=&#39;p0&#39;, x_label=&#39;p$_0$ [kPa]&#39;,
-                  y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
-                  **{**args, **kwargs})
+        self.plot(x=&#39;p0&#39;, y=&#39;t0&#39;, **{**args, **kwargs})
 
     def plot_p_V(self,
                  show=False,
@@ -3715,6 +3725,7 @@ exit.</p></div>
                  color=colorscheme_one()[0],
                  colorblind=False,
                  **kwargs):
+        warnings.warn(&#39;`&lt;stream or system&gt;.plot_p_V(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;V&#34;, &#34;y=p0&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
         &#34;&#34;&#34;
         Pressure-Volume system plot.
         &#34;&#34;&#34;
@@ -3722,9 +3733,7 @@ exit.</p></div>
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
 
-        self.plot(x=&#39;V&#39;,  x_label=&#39;v$_0$ [m$^3$/n]&#39;,
-                  y=&#39;p0&#39;, y_label=&#39;p$_0$ [kPa]&#39;,
-                  **{**args, **kwargs})
+        self.plot(x=&#39;V&#39;, y=&#39;p0&#39;, **{**args, **kwargs})
 
     def plot_T_S(self,
                  show=False,
@@ -3732,6 +3741,7 @@ exit.</p></div>
                  color=colorscheme_one()[0],
                  colorblind=False,
                  **kwargs):
+        warnings.warn(&#39;`&lt;stream or system&gt;.plot_T_S(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;S&#34;, &#34;y=t0&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
         &#34;&#34;&#34;
         Temperature-Entropy system plot.
         &#34;&#34;&#34;
@@ -3739,9 +3749,7 @@ exit.</p></div>
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
 
-        self.plot(x=&#39;S&#39;,  x_label=&#39;$\Delta$S [kJ/K]&#39;,
-                  y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
-                  **{**args, **kwargs})
+        self.plot(x=&#39;S&#39;, y=&#39;t0&#39;, **{**args, **kwargs})
 
     def plot_H_p(self,
                  show=False,
@@ -3749,6 +3757,7 @@ exit.</p></div>
                  color=colorscheme_one()[0],
                  colorblind=False,
                  **kwargs):
+        warnings.warn(&#39;`&lt;stream or system&gt;.plot_H_p(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;p0&#34;, y=&#34;H&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
         &#34;&#34;&#34;
         Pressure-Enthalpy system plot.
         &#34;&#34;&#34;
@@ -3756,13 +3765,11 @@ exit.</p></div>
         args.pop(&#39;self&#39;, None)
         args.pop(&#39;kwargs&#39;, None)
 
-        self.plot(x=&#39;p0&#39;, x_label=&#39;p$_0$ [kPa]&#39;,
-                  y=&#39;H&#39;,  y_label=&#39;H$_0$ [kJ]&#39;,
-                  **{**args, **kwargs})</code></pre>
+        self.plot(x=&#39;p0&#39;, y=&#39;H&#39;, **{**args, **kwargs})</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
-<li><a title="huracan.engine.SUPERSET" href="#huracan.engine.SUPERSET">SUPERSET</a></li>
+<li><a title="huracan.engine.set_of_streams" href="#huracan.engine.set_of_streams">set_of_streams</a></li>
 </ul>
 <h3>Methods</h3>
 <dl>
@@ -3878,7 +3885,7 @@ exit.</p></div>
     for s in streams:
         self.streams.append(s)
         s.superset = s.system = self
-        s.superset_takeover()</code></pre>
+        s.integrate_in_system()</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.system.parents"><code class="name flex">
@@ -3907,7 +3914,7 @@ flowing to children streams.</p></div>
 </details>
 </dd>
 <dt id="huracan.engine.system.plot"><code class="name flex">
-<span>def <span class="ident">plot</span></span>(<span>self, x, y, x_scale=None, y_scale=None, x_label=None, y_label=None, show=False, plot_label=None, color='darkred', colorblind=False, **kwargs)</span>
+<span>def <span class="ident">plot</span></span>(<span>self, x, y, scale_x=None, scale_y=None, label_x=None, label_y=None, show=False, plot_label=None, color='darkred', colorblind=False, **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><h2 id="system-plot">System Plot</h2>
@@ -3922,15 +3929,15 @@ plotted for each stream.</p>
 - fig=None, ax=None -&gt; plot_cycle_graph -&gt; fig in **kwargs keys
 - fig=None, ax=None -&gt; line, scatter
 - line, scatter plot onto active figure, axis</p>
-<p>:param x_scale: Scaling factor.
-:param y_scale: Scaling factor.</p>
+<p>:param scale_x: Scaling factor.
+:param scale_y: Scaling factor.</p>
 <p>:type x:
 str
 :type y:
 str
-:type x_scale:
+:type scale_x:
 float
-:type y_scale:
+:type scale_y:
 float</p></div>
 <details class="source">
 <summary>
@@ -3938,8 +3945,8 @@ float</p></div>
 </summary>
 <pre><code class="python">def plot(self,
          x, y,
-         x_scale=None, y_scale=None,
-         x_label=None, y_label=None,
+         scale_x=None, scale_y=None,
+         label_x=None, label_y=None,
          show=False,
          plot_label=None,                  # When called from a _system_takeover the plot_label and color
          color=colorscheme_one()[0],       # arguments are passed to the function, but disregarded.
@@ -3963,41 +3970,42 @@ float</p></div>
             - fig=None, ax=None -&gt; line, scatter
                 - line, scatter plot onto active figure, axis
 
-    :param x_scale: Scaling factor.
-    :param y_scale: Scaling factor.
+    :param scale_x: Scaling factor.
+    :param scale_y: Scaling factor.
 
     :type x:        str
     :type y:        str
-    :type x_scale:  float
-    :type y_scale:  float
+    :type scale_x:  float
+    :type scale_y:  float
     &#34;&#34;&#34;
+
     plotters   = []
     x_system   = []
     y_system   = []
 
     defaults   = {&#39;legend&#39;: kwargs.pop(&#39;legend&#39;, True)}
 
-    scales     = {&#39;t0&#39;: 1,
-                  &#39;p0&#39;: 1/1000,
-                  &#39;V&#39;:  1,
-                  &#39;S&#39;:  1/1000,
-                  &#39;H&#39;:  1/1000}
-    x_scale    = scales[x] if isinstance(x_scale, type(None)) else x_scale
-    y_scale    = scales[y] if isinstance(y_scale, type(None)) else y_scale
+    name_x_default, label_x_default, scale_x_default = physical_quantities[x]
+    name_y_default, label_y_default, scale_y_default = physical_quantities[y]
+
+    scale_x    = scale_x_default if isinstance(scale_x, type(None)) else scale_x
+    scale_y    = scale_y_default if isinstance(scale_y, type(None)) else scale_y
+    label_x    = label_x_default if isinstance(label_x, type(None)) else label_x
+    label_y    = label_y_default if isinstance(label_y, type(None)) else label_y
 
     # 1. Create figure
-    figure((9, 5))
+    plt.figure(figsize=(9, 5))
 
     # 2. Create state variable and plotters vectors
-    for stream in self.streams:
+    for i, stream in enumerate(self.streams):
 
         # Plot defaults
         subplot_defaults = {
             &#39;plot_label&#39;: f&#39;{&#34;.&#34;.join([str(c) for c in stream.stream_id])}&#39;,
-            &#39;x_label&#39;: x_label,
-            &#39;y_label&#39;: y_label,
+            &#39;label_x&#39;: label_x,
+            &#39;label_y&#39;: label_y,
             &#39;color&#39;: colorscheme_one()[self.streams.index(stream)],
-            &#39;zorder&#39;: self.streams.index(stream),
+            &#39;zorder&#39;: self.streams.index(stream)
         }
 
         if colorblind:
@@ -4008,13 +4016,13 @@ float</p></div>
         def gen_plotter(**defaults):
             &#34;&#34;&#34;
             Returns a plotter using the defaults.
-            Any keyword arguemnts passed to the
+            Any keyword arguments passed to the
             _plot function overwrite the defaults.
             &#34;&#34;&#34;
             return lambda x, y, **kwargs: stream.plot_cycle_graph(x=x, y=y, **{**defaults, **kwargs})
 
-        x_stream = getattr(stream, x)()*x_scale
-        y_stream = getattr(stream, y)()*y_scale
+        x_stream = getattr(stream, x)()*scale_x
+        y_stream = getattr(stream, y)()*scale_y
 
         plotters.append(gen_plotter(**subplot_defaults))
         x_system.append(x_stream)
@@ -4023,23 +4031,25 @@ float</p></div>
         # 2.1 Parent connectors
         if hasattr(stream, &#39;parents&#39;):
             for parent in stream.parents:
-                x_parent = getattr(parent, x)()*x_scale
-                y_parent = getattr(parent, y)()*y_scale
+                x_parent = getattr(parent, x)()*scale_x
+                y_parent = getattr(parent, y)()*scale_y
                 # If the parent stream has no stages, get parent stream&#39;s gas state
-                p_x = x_parent[-1] if len(x_parent) != 0 else getattr(parent.gas, x)*x_scale
-                p_y = y_parent[-1] if len(y_parent) != 0 else getattr(parent.gas, y)*y_scale
+                p_x = x_parent[-1] if len(x_parent) != 0 else getattr(parent.gas, x)*scale_x
+                p_y = y_parent[-1] if len(y_parent) != 0 else getattr(parent.gas, y)*scale_y
                 # Connector
                 if len(stream.components) &gt; 0:
                     x_system.append(np.array([p_x, x_stream[0]]))
                     y_system.append(np.array([p_y, y_stream[0]]))
 
-                    connector_args = {&#39;color&#39;: subplot_defaults[&#39;color&#39;],
-                                      &#39;zorder&#39;: self.streams.index(stream),
-                                      &#39;plot_label&#39;: None,
-                                      &#39;x_label&#39;: None,
-                                      &#39;y_label&#39;: None,
-                                      &#39;marker&#39;: &#39;&#39;
-                                      }
+                    connector_args = {
+                        &#39;color&#39;: subplot_defaults[&#39;color&#39;],
+                        &#39;zorder&#39;: self.streams.index(stream),
+                        &#39;plot_label&#39;: None,
+                        &#39;label_x&#39;: None,
+                        &#39;label_y&#39;: None,
+                        &#39;marker&#39;: &#39;&#39;,
+                        &#39;zorder&#39;: 0
+                    }
 
                     if colorblind:
                         connector_args = {**connector_args}
@@ -4055,24 +4065,20 @@ float</p></div>
     y_system = np.array(y_system, dtype=&#39;object&#39;)[mask].tolist()
     plotters = np.array(plotters, dtype=&#39;object&#39;)[mask].tolist()
 
-    # 4. comparison call
-    #     - fig=None, ax=None -&gt; plot_cycle_graph -&gt; fig in **kwargs keys
-    #         - fig=None, ax=None -&gt; line, scatter
-    #             - line, scatter plot onto active figure, axis
-    comparison(x=x_system,
-               y=y_system,
-               f=plotters,
-               legend_loc=(0.865, 0.425),
-               autocolor=False,
-               show=show,
-               **{**kwargs, **defaults})</code></pre>
+    # 4. Plot all
+    for i, plotter in enumerate(plotters):
+        plotter(x_system[i], y_system[i], **{**kwargs, **defaults})
+
+    plt.legend()
+
+    plt.show()</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.system.plot_H_p"><code class="name flex">
 <span>def <span class="ident">plot_H_p</span></span>(<span>self, show=False, plot_label=None, color='darkred', colorblind=False, **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Pressure-Enthalpy system plot.</p></div>
+<div class="desc"></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -4083,6 +4089,7 @@ float</p></div>
              color=colorscheme_one()[0],
              colorblind=False,
              **kwargs):
+    warnings.warn(&#39;`&lt;stream or system&gt;.plot_H_p(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;p0&#34;, y=&#34;H&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
     &#34;&#34;&#34;
     Pressure-Enthalpy system plot.
     &#34;&#34;&#34;
@@ -4090,16 +4097,14 @@ float</p></div>
     args.pop(&#39;self&#39;, None)
     args.pop(&#39;kwargs&#39;, None)
 
-    self.plot(x=&#39;p0&#39;, x_label=&#39;p$_0$ [kPa]&#39;,
-              y=&#39;H&#39;,  y_label=&#39;H$_0$ [kJ]&#39;,
-              **{**args, **kwargs})</code></pre>
+    self.plot(x=&#39;p0&#39;, y=&#39;H&#39;, **{**args, **kwargs})</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.system.plot_T_S"><code class="name flex">
 <span>def <span class="ident">plot_T_S</span></span>(<span>self, show=False, plot_label=None, color='darkred', colorblind=False, **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Temperature-Entropy system plot.</p></div>
+<div class="desc"></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -4110,6 +4115,7 @@ float</p></div>
              color=colorscheme_one()[0],
              colorblind=False,
              **kwargs):
+    warnings.warn(&#39;`&lt;stream or system&gt;.plot_T_S(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;S&#34;, &#34;y=t0&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
     &#34;&#34;&#34;
     Temperature-Entropy system plot.
     &#34;&#34;&#34;
@@ -4117,16 +4123,14 @@ float</p></div>
     args.pop(&#39;self&#39;, None)
     args.pop(&#39;kwargs&#39;, None)
 
-    self.plot(x=&#39;S&#39;,  x_label=&#39;$\Delta$S [kJ/K]&#39;,
-              y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
-              **{**args, **kwargs})</code></pre>
+    self.plot(x=&#39;S&#39;, y=&#39;t0&#39;, **{**args, **kwargs})</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.system.plot_T_p"><code class="name flex">
 <span>def <span class="ident">plot_T_p</span></span>(<span>self, show=False, plot_label=None, color='darkred', colorblind=False, **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Temperature-Pressure system plot.</p></div>
+<div class="desc"></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -4138,6 +4142,7 @@ float</p></div>
              colorblind=False,
              **kwargs
              ):
+    warnings.warn(&#39;`&lt;stream or system&gt;.plot_T_p(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;V&#34;, &#34;y=p0&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
     &#34;&#34;&#34;
     Temperature-Pressure system plot.
     &#34;&#34;&#34;
@@ -4145,16 +4150,14 @@ float</p></div>
     args.pop(&#39;self&#39;, None)
     args.pop(&#39;kwargs&#39;, None)
 
-    self.plot(x=&#39;p0&#39;, x_label=&#39;p$_0$ [kPa]&#39;,
-              y=&#39;t0&#39;, y_label=&#39;T$_0$ [K]&#39;,
-              **{**args, **kwargs})</code></pre>
+    self.plot(x=&#39;p0&#39;, y=&#39;t0&#39;, **{**args, **kwargs})</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.system.plot_p_V"><code class="name flex">
 <span>def <span class="ident">plot_p_V</span></span>(<span>self, show=False, plot_label=None, color='darkred', colorblind=False, **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Pressure-Volume system plot.</p></div>
+<div class="desc"></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -4165,6 +4168,7 @@ float</p></div>
              color=colorscheme_one()[0],
              colorblind=False,
              **kwargs):
+    warnings.warn(&#39;`&lt;stream or system&gt;.plot_p_V(...)` is deprecated in favor of `&lt;stream or system&gt;.plot(x=&#34;V&#34;, &#34;y=p0&#34;, ...)` and will be removed from Huracan in the next major release&#39;, DeprecationWarning, stacklevel=2)
     &#34;&#34;&#34;
     Pressure-Volume system plot.
     &#34;&#34;&#34;
@@ -4172,9 +4176,7 @@ float</p></div>
     args.pop(&#39;self&#39;, None)
     args.pop(&#39;kwargs&#39;, None)
 
-    self.plot(x=&#39;V&#39;,  x_label=&#39;v$_0$ [m$^3$/n]&#39;,
-              y=&#39;p0&#39;, y_label=&#39;p$_0$ [kPa]&#39;,
-              **{**args, **kwargs})</code></pre>
+    self.plot(x=&#39;V&#39;, y=&#39;p0&#39;, **{**args, **kwargs})</code></pre>
 </details>
 </dd>
 <dt id="huracan.engine.system.power_available"><code class="name flex">
@@ -4363,22 +4365,19 @@ float</p></div>
 <li><h3><a href="#header-classes">Classes</a></h3>
 <ul>
 <li>
-<h4><code><a title="huracan.engine.SET" href="#huracan.engine.SET">SET</a></code></h4>
-<ul class="">
-<li><code><a title="huracan.engine.SET.superset_takeover" href="#huracan.engine.SET.superset_takeover">superset_takeover</a></code></li>
-</ul>
-</li>
-<li>
-<h4><code><a title="huracan.engine.SUPERSET" href="#huracan.engine.SUPERSET">SUPERSET</a></code></h4>
-</li>
-<li>
 <h4><code><a title="huracan.engine.component" href="#huracan.engine.component">component</a></code></h4>
 </li>
 <li>
-<h4><code><a title="huracan.engine.constructor_SET" href="#huracan.engine.constructor_SET">constructor_SET</a></code></h4>
+<h4><code><a title="huracan.engine.component_set_constructor" href="#huracan.engine.component_set_constructor">component_set_constructor</a></code></h4>
 </li>
 <li>
-<h4><code><a title="huracan.engine.constructor_SUPERSET" href="#huracan.engine.constructor_SUPERSET">constructor_SUPERSET</a></code></h4>
+<h4><code><a title="huracan.engine.set_of_components" href="#huracan.engine.set_of_components">set_of_components</a></code></h4>
+<ul class="">
+<li><code><a title="huracan.engine.set_of_components.integrate_in_system" href="#huracan.engine.set_of_components.integrate_in_system">integrate_in_system</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="huracan.engine.set_of_streams" href="#huracan.engine.set_of_streams">set_of_streams</a></code></h4>
 </li>
 <li>
 <h4><code><a title="huracan.engine.shaft" href="#huracan.engine.shaft">shaft</a></code></h4>
@@ -4409,6 +4408,7 @@ float</p></div>
 <li><code><a title="huracan.engine.stream.merge" href="#huracan.engine.stream.merge">merge</a></code></li>
 <li><code><a title="huracan.engine.stream.n_instances" href="#huracan.engine.stream.n_instances">n_instances</a></code></li>
 <li><code><a title="huracan.engine.stream.p0" href="#huracan.engine.stream.p0">p0</a></code></li>
+<li><code><a title="huracan.engine.stream.plot" href="#huracan.engine.stream.plot">plot</a></code></li>
 <li><code><a title="huracan.engine.stream.plot_H_p" href="#huracan.engine.stream.plot_H_p">plot_H_p</a></code></li>
 <li><code><a title="huracan.engine.stream.plot_T_S" href="#huracan.engine.stream.plot_T_S">plot_T_S</a></code></li>
 <li><code><a title="huracan.engine.stream.plot_T_p" href="#huracan.engine.stream.plot_T_p">plot_T_p</a></code></li>
@@ -4428,6 +4428,9 @@ float</p></div>
 <li><code><a title="huracan.engine.stream.thrust_total" href="#huracan.engine.stream.thrust_total">thrust_total</a></code></li>
 <li><code><a title="huracan.engine.stream.v_exit" href="#huracan.engine.stream.v_exit">v_exit</a></code></li>
 </ul>
+</li>
+<li>
+<h4><code><a title="huracan.engine.stream_set_constructor" href="#huracan.engine.stream_set_constructor">stream_set_constructor</a></code></h4>
 </li>
 <li>
 <h4><code><a title="huracan.engine.system" href="#huracan.engine.system">system</a></code></h4>

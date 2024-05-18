@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.10.0" />
-<title>huracan.components.static API documentation</title>
-<meta name="description" content="Static components" />
+<title>huracan.components.channels API documentation</title>
+<meta name="description" content="Engine channels" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
 <link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
@@ -19,20 +19,20 @@
 <main>
 <article id="content">
 <header>
-<h1 class="title">Module <code>huracan.components.static</code></h1>
+<h1 class="title">Module <code>huracan.components.channels</code></h1>
 </header>
 <section id="section-intro">
-<h2 id="static-components">Static components</h2>
+<h2 id="engine-channels">Engine channels</h2>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python"># SPDX-FileCopyrightText: © 2021 Antonio López Rivera &lt;antonlopezr99@gmail.com&gt;
+<pre><code class="python"># SPDX-FileCopyrightText: © 2024 Antonio López Rivera &lt;antonlopezr99@gmail.com&gt;
 # SPDX-License-Identifier: vGPL-3.0-only
 
 &#34;&#34;&#34;
-Static components
------------------
+Engine channels
+---------------
 &#34;&#34;&#34;
 
 from huracan.engine import component
@@ -84,6 +84,39 @@ class inlet(intake):
 
         assert not isinstance(eta, type(None)) or not isinstance(PI, type(None)) or not isinstance(TAU, type(None))
 
+
+class bleed_duct(component):
+    &#34;&#34;&#34;
+    Bleed duct
+    ----------
+    &#34;&#34;&#34;
+    def __init__(self,
+                 t01,
+                 eta,
+                 PI=1,
+                 ):
+        &#34;&#34;&#34;
+        :param t01:  Temperature after the bleed duct.
+        :param eta:  Isentropic efficiency.
+        :param PI:   Pressure ratio.
+        &#34;&#34;&#34;
+
+        self.t01 = t01
+        self.eta = eta
+        self.PI  = PI
+
+    def tf(self, gas):
+
+        dt = self.t01 - gas.t0
+
+        self.Q_out = dt*gas.mf*gas.cp(gas.t0) / self.eta
+
+        return gas.heat_exchange(eta=self.eta,
+                                 PI=self.PI,
+                                 cp=gas.cp(gas.t0),
+                                 Q_ex=self.Q_out,
+                                 )
+    
 
 class nozzle(component):
     &#34;&#34;&#34;
@@ -158,7 +191,85 @@ class nozzle(component):
 <section>
 <h2 class="section-title" id="header-classes">Classes</h2>
 <dl>
-<dt id="huracan.components.static.inlet"><code class="flex name class">
+<dt id="huracan.components.channels.bleed_duct"><code class="flex name class">
+<span>class <span class="ident">bleed_duct</span></span>
+<span>(</span><span>t01, eta, PI=1)</span>
+</code></dt>
+<dd>
+<div class="desc"><h2 id="bleed-duct">Bleed Duct</h2>
+<p>:param t01:
+Temperature after the bleed duct.
+:param eta:
+Isentropic efficiency.
+:param PI:
+Pressure ratio.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class bleed_duct(component):
+    &#34;&#34;&#34;
+    Bleed duct
+    ----------
+    &#34;&#34;&#34;
+    def __init__(self,
+                 t01,
+                 eta,
+                 PI=1,
+                 ):
+        &#34;&#34;&#34;
+        :param t01:  Temperature after the bleed duct.
+        :param eta:  Isentropic efficiency.
+        :param PI:   Pressure ratio.
+        &#34;&#34;&#34;
+
+        self.t01 = t01
+        self.eta = eta
+        self.PI  = PI
+
+    def tf(self, gas):
+
+        dt = self.t01 - gas.t0
+
+        self.Q_out = dt*gas.mf*gas.cp(gas.t0) / self.eta
+
+        return gas.heat_exchange(eta=self.eta,
+                                 PI=self.PI,
+                                 cp=gas.cp(gas.t0),
+                                 Q_ex=self.Q_out,
+                                 )</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="huracan.engine.component" href="../engine.html#huracan.engine.component">component</a></li>
+</ul>
+<h3>Methods</h3>
+<dl>
+<dt id="huracan.components.channels.bleed_duct.tf"><code class="name flex">
+<span>def <span class="ident">tf</span></span>(<span>self, gas)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def tf(self, gas):
+
+    dt = self.t01 - gas.t0
+
+    self.Q_out = dt*gas.mf*gas.cp(gas.t0) / self.eta
+
+    return gas.heat_exchange(eta=self.eta,
+                             PI=self.PI,
+                             cp=gas.cp(gas.t0),
+                             Q_ex=self.Q_out,
+                             )</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+<dt id="huracan.components.channels.inlet"><code class="flex name class">
 <span>class <span class="ident">inlet</span></span>
 <span>(</span><span>eta=None, PI=None, TAU=None)</span>
 </code></dt>
@@ -197,11 +308,11 @@ float
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
-<li><a title="huracan.components.static.intake" href="#huracan.components.static.intake">intake</a></li>
+<li><a title="huracan.components.channels.intake" href="#huracan.components.channels.intake">intake</a></li>
 <li><a title="huracan.engine.component" href="../engine.html#huracan.engine.component">component</a></li>
 </ul>
 </dd>
-<dt id="huracan.components.static.intake"><code class="flex name class">
+<dt id="huracan.components.channels.intake"><code class="flex name class">
 <span>class <span class="ident">intake</span></span>
 <span>(</span><span>eta=1, PI=1, TAU=1)</span>
 </code></dt>
@@ -245,11 +356,11 @@ float
 </ul>
 <h3>Subclasses</h3>
 <ul class="hlist">
-<li><a title="huracan.components.static.inlet" href="#huracan.components.static.inlet">inlet</a></li>
+<li><a title="huracan.components.channels.inlet" href="#huracan.components.channels.inlet">inlet</a></li>
 </ul>
 <h3>Methods</h3>
 <dl>
-<dt id="huracan.components.static.intake.tf"><code class="name flex">
+<dt id="huracan.components.channels.intake.tf"><code class="name flex">
 <span>def <span class="ident">tf</span></span>(<span>self, gas)</span>
 </code></dt>
 <dd>
@@ -264,7 +375,7 @@ float
 </dd>
 </dl>
 </dd>
-<dt id="huracan.components.static.nozzle"><code class="flex name class">
+<dt id="huracan.components.channels.nozzle"><code class="flex name class">
 <span>class <span class="ident">nozzle</span></span>
 <span>(</span><span>eta, PI=None)</span>
 </code></dt>
@@ -347,7 +458,7 @@ float</p></div>
 </ul>
 <h3>Methods</h3>
 <dl>
-<dt id="huracan.components.static.nozzle.inv_pi_crit"><code class="name flex">
+<dt id="huracan.components.channels.nozzle.inv_pi_crit"><code class="name flex">
 <span>def <span class="ident">inv_pi_crit</span></span>(<span>self, gas)</span>
 </code></dt>
 <dd>
@@ -383,7 +494,7 @@ with a maximum total pressure ratio in the nozzle equal to</p>
     return 1/(1-1/self.eta*((k-1)/(k+1)))**(k/(k-1))</code></pre>
 </details>
 </dd>
-<dt id="huracan.components.static.nozzle.pi"><code class="name flex">
+<dt id="huracan.components.channels.nozzle.pi"><code class="name flex">
 <span>def <span class="ident">pi</span></span>(<span>self, gas)</span>
 </code></dt>
 <dd>
@@ -422,7 +533,7 @@ ratio.</p></div>
     return PI</code></pre>
 </details>
 </dd>
-<dt id="huracan.components.static.nozzle.tf"><code class="name flex">
+<dt id="huracan.components.channels.nozzle.tf"><code class="name flex">
 <span>def <span class="ident">tf</span></span>(<span>self, gas)</span>
 </code></dt>
 <dd>
@@ -444,7 +555,7 @@ ratio.</p></div>
 <h1>Index</h1>
 <div class="toc">
 <ul>
-<li><a href="#static-components">Static components</a></li>
+<li><a href="#engine-channels">Engine channels</a></li>
 </ul>
 </div>
 <ul id="index">
@@ -456,20 +567,26 @@ ratio.</p></div>
 <li><h3><a href="#header-classes">Classes</a></h3>
 <ul>
 <li>
-<h4><code><a title="huracan.components.static.inlet" href="#huracan.components.static.inlet">inlet</a></code></h4>
-</li>
-<li>
-<h4><code><a title="huracan.components.static.intake" href="#huracan.components.static.intake">intake</a></code></h4>
+<h4><code><a title="huracan.components.channels.bleed_duct" href="#huracan.components.channels.bleed_duct">bleed_duct</a></code></h4>
 <ul class="">
-<li><code><a title="huracan.components.static.intake.tf" href="#huracan.components.static.intake.tf">tf</a></code></li>
+<li><code><a title="huracan.components.channels.bleed_duct.tf" href="#huracan.components.channels.bleed_duct.tf">tf</a></code></li>
 </ul>
 </li>
 <li>
-<h4><code><a title="huracan.components.static.nozzle" href="#huracan.components.static.nozzle">nozzle</a></code></h4>
+<h4><code><a title="huracan.components.channels.inlet" href="#huracan.components.channels.inlet">inlet</a></code></h4>
+</li>
+<li>
+<h4><code><a title="huracan.components.channels.intake" href="#huracan.components.channels.intake">intake</a></code></h4>
 <ul class="">
-<li><code><a title="huracan.components.static.nozzle.inv_pi_crit" href="#huracan.components.static.nozzle.inv_pi_crit">inv_pi_crit</a></code></li>
-<li><code><a title="huracan.components.static.nozzle.pi" href="#huracan.components.static.nozzle.pi">pi</a></code></li>
-<li><code><a title="huracan.components.static.nozzle.tf" href="#huracan.components.static.nozzle.tf">tf</a></code></li>
+<li><code><a title="huracan.components.channels.intake.tf" href="#huracan.components.channels.intake.tf">tf</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="huracan.components.channels.nozzle" href="#huracan.components.channels.nozzle">nozzle</a></code></h4>
+<ul class="">
+<li><code><a title="huracan.components.channels.nozzle.inv_pi_crit" href="#huracan.components.channels.nozzle.inv_pi_crit">inv_pi_crit</a></code></li>
+<li><code><a title="huracan.components.channels.nozzle.pi" href="#huracan.components.channels.nozzle.pi">pi</a></code></li>
+<li><code><a title="huracan.components.channels.nozzle.tf" href="#huracan.components.channels.nozzle.tf">tf</a></code></li>
 </ul>
 </li>
 </ul>

@@ -58,12 +58,28 @@ divulgation and educational purposes.</p>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python"># SPDX-FileCopyrightText: © 2021 Antonio López Rivera &lt;antonlopezr99@gmail.com&gt;
+<pre><code class="python"># SPDX-FileCopyrightText: © 2024 Antonio López Rivera &lt;antonlopezr99@gmail.com&gt;
 # SPDX-License-Identifier: GPL-3.0-only
 
 &#34;&#34;&#34;
 .. include:: ./documentation.md
-&#34;&#34;&#34;</code></pre>
+&#34;&#34;&#34;
+
+component_codes = {
+    &#39;fan&#39;:                &#39;fn&#39;,
+    &#39;prop&#39;:               &#39;pr&#39;,
+    &#39;propfan&#39;:            &#39;pf&#39;,
+    &#39;intake&#39;:             &#39;it&#39;,
+    &#39;inlet&#39;:              &#39;il&#39;,
+    &#39;compressor&#39;:         &#39;cp&#39;,
+    &#39;bleed_duct&#39;:         &#39;bd&#39;,
+    &#39;combustion_chamber&#39;: &#39;cc&#39;,
+    &#39;turbine&#39;:            &#39;tb&#39;,
+    &#39;nozzle&#39;:             &#39;nz&#39;,
+    &#39;intercooler&#39;:        &#39;ic&#39;,
+    &#39;recuperator&#39;:        &#39;rc&#39;,
+    &#39;afterburner&#39;:        &#39;ab&#39;,
+}</code></pre>
 </details>
 </section>
 <section>
@@ -80,6 +96,10 @@ divulgation and educational purposes.</p>
 <dt><code class="name"><a title="huracan.engine" href="engine.html">huracan.engine</a></code></dt>
 <dd>
 <div class="desc"><p>Huracan engine elements</p></div>
+</dd>
+<dt><code class="name"><a title="huracan.physical_quantities" href="physical_quantities.html">huracan.physical_quantities</a></code></dt>
+<dd>
+<div class="desc"><p>Information about physical quantities used in Huracan</p></div>
 </dd>
 <dt><code class="name"><a title="huracan.thermo" href="thermo/index.html">huracan.thermo</a></code></dt>
 <dd>
@@ -116,6 +136,7 @@ divulgation and educational purposes.</p>
 <li><code><a title="huracan.components" href="components/index.html">huracan.components</a></code></li>
 <li><code><a title="huracan.constants" href="constants.html">huracan.constants</a></code></li>
 <li><code><a title="huracan.engine" href="engine.html">huracan.engine</a></code></li>
+<li><code><a title="huracan.physical_quantities" href="physical_quantities.html">huracan.physical_quantities</a></code></li>
 <li><code><a title="huracan.thermo" href="thermo/index.html">huracan.thermo</a></code></li>
 <li><code><a title="huracan.utils" href="utils.html">huracan.utils</a></code></li>
 </ul>
